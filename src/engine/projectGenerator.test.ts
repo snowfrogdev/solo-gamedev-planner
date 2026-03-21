@@ -7,6 +7,9 @@ const baseInputs: PlannerInputs = {
   timeHorizonMonths: 60,
   minDevScope: 3,
   targetDevScope: 12,
+  monthlyFixedExpenses: 300,
+  projectCostBase: 500,
+  projectCostPerMonth: 250,
 };
 
 describe('generatePlan', () => {

@@ -11,6 +11,7 @@ import { computeLaunchPrice } from './engine/pricingModel';
 import { computeSalesTimeSeries } from './engine/salesModel';
 import { optimizeM1Values } from './engine/m1Optimizer';
 import { computeAccountingTimeSeries } from './engine/accountingTimeSeries';
+import { DEFAULT_MONTHLY_FIXED_EXPENSES, DEFAULT_PROJECT_COST_BASE, DEFAULT_PROJECT_COST_PER_MONTH } from './engine/expenses';
 import type { DowntimeBreakdown, PricingInfo, SalesTimeSeries, AccountingTimeSeries } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -39,8 +40,16 @@ function openConfig(): void {
       configRoot,
       state.downtimeConfig,
       {
+        monthlyFixedExpenses: state.inputs.monthlyFixedExpenses,
+        projectCostBase: state.inputs.projectCostBase,
+        projectCostPerMonth: state.inputs.projectCostPerMonth,
+      },
+      {
         onChange(config) {
           updateState({ downtimeConfig: config, useCustomDowntime: true });
+        },
+        onExpenseChange(expenses) {
+          updateState({ inputs: { ...state.inputs, ...expenses } });
         },
         onClose() {
           configScreen?.hide();
@@ -56,6 +65,12 @@ function openConfig(): void {
               recoveryMaxOutput: getDefaultRecoveryMax(),
             },
             useCustomDowntime: false,
+            inputs: {
+              ...state.inputs,
+              monthlyFixedExpenses: DEFAULT_MONTHLY_FIXED_EXPENSES,
+              projectCostBase: DEFAULT_PROJECT_COST_BASE,
+              projectCostPerMonth: DEFAULT_PROJECT_COST_PER_MONTH,
+            },
           });
           configScreen?.destroy();
           configScreen = null;
@@ -113,12 +128,16 @@ function regenerate(): void {
       const pricing = pricingMap.get(p.index)!;
       return [
         p.index,
-        computeSalesTimeSeries(p.endMonth, state.inputs.timeHorizonMonths, m1Values[i], pricing.launchPrice),
+        computeSalesTimeSeries(p.endMonth, state.inputs.timeHorizonMonths, m1Values[i], pricing.launchPrice, {
+          devDurationMonths: p.devDurationMonths,
+          projectCostBase: state.inputs.projectCostBase,
+          projectCostPerMonth: state.inputs.projectCostPerMonth,
+        }),
       ];
     }),
   );
 
-  accounting = computeAccountingTimeSeries(plan.projects, salesMap, plan.totalMonths);
+  accounting = computeAccountingTimeSeries(plan.projects, salesMap, plan.totalMonths, state.inputs);
 
   timeline.update(plan, state.inputs, accounting);
   sidePanel.hide();

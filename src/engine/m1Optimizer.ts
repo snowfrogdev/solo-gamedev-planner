@@ -26,11 +26,15 @@ function evaluateAnnualizedIncome(
   const salesMap = new Map(
     projects.map((p, i) => {
       const pricing = pricingMap.get(p.index)!;
-      return [p.index, computeSalesTimeSeries(p.endMonth, horizon, m1Values[i], pricing.launchPrice)] as const;
+      return [p.index, computeSalesTimeSeries(p.endMonth, horizon, m1Values[i], pricing.launchPrice, {
+        devDurationMonths: p.devDurationMonths,
+        projectCostBase: inputs.projectCostBase,
+        projectCostPerMonth: inputs.projectCostPerMonth,
+      })] as const;
     }),
   );
 
-  const accounting = computeAccountingTimeSeries(projects, salesMap, horizon);
+  const accounting = computeAccountingTimeSeries(projects, salesMap, horizon, inputs);
   return computeAnnualizedIncome(accounting, horizon, inputs.targetDevScope);
 }
 

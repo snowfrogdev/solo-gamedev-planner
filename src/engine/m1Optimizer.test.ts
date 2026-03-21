@@ -11,6 +11,9 @@ const baseInputs: PlannerInputs = {
   timeHorizonMonths: 60,
   minDevScope: 3,
   targetDevScope: 12,
+  monthlyFixedExpenses: 300,
+  projectCostBase: 500,
+  projectCostPerMonth: 250,
 };
 
 function buildMaps(inputs: PlannerInputs) {
@@ -75,7 +78,7 @@ describe('optimizeM1Values', () => {
         return [p.index, computeSalesTimeSeries(p.endMonth, horizon, m1Values[i], pricing.launchPrice)] as const;
       }),
     );
-    const accounting = computeAccountingTimeSeries(plan.projects, salesMap, horizon);
+    const accounting = computeAccountingTimeSeries(plan.projects, salesMap, horizon, baseInputs);
 
     const windowSize = Math.max(12, baseInputs.targetDevScope);
     const windowStart = Math.max(0, Math.floor(horizon) - windowSize);

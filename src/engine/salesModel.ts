@@ -1,5 +1,6 @@
 import type { SalesTimeSeries } from '../types';
 import { averageEffectivePrice } from './pricingModel';
+import { devCostWeights } from './expenses';
 
 const DECAY_EXPONENT = 0.65;
 
@@ -10,18 +11,29 @@ export function unitSalesDecay(month: number, tailStrength: number): number {
   return tailStrength / Math.pow(month, DECAY_EXPONENT);
 }
 
+export interface SalesTimeSeriesOptions {
+  devDurationMonths?: number;
+  projectCostBase?: number;
+  projectCostPerMonth?: number;
+  tailStrength?: number;
+}
+
 /**
  * Compute a monthly unit-sales time series for a single game.
  * monthlySales[0] = month 1 (launch month).
- * Also pre-computes monthly prices (AEP) and revenue (price × units).
+ * Also pre-computes monthly prices (AEP), revenue, and per-project expenses.
  */
 export function computeSalesTimeSeries(
   launchMonth: number,
   horizonEndMonth: number,
   m1Units: number,
   launchPrice: number,
-  tailStrength = 0.55,
+  options?: SalesTimeSeriesOptions,
 ): SalesTimeSeries {
+  const devDurationMonths = options?.devDurationMonths ?? 0;
+  const projectCostBase = options?.projectCostBase ?? 0;
+  const projectCostPerMonth = options?.projectCostPerMonth ?? 0;
+  const tailStrength = options?.tailStrength ?? 0.55;
   const maxMonths = Math.max(horizonEndMonth - launchMonth, 120);
   const monthlySales: number[] = [];
   const monthlyPrices: number[] = [];
@@ -50,6 +62,11 @@ export function computeSalesTimeSeries(
   if (len < 24) cumulativeYear2 = cumulative;
   if (len < 60) cumulativeYear5 = cumulative;
 
+  // Per-project variable expenses distributed across dev months
+  const totalProjectCost = projectCostBase + devDurationMonths * projectCostPerMonth;
+  const weights = devCostWeights(devDurationMonths);
+  const monthlyExpenses = weights.map((w) => totalProjectCost * w);
+
   return {
     m1Units,
     tailStrength,
@@ -60,5 +77,7 @@ export function computeSalesTimeSeries(
     cumulativeYear1,
     cumulativeYear2,
     cumulativeYear5,
+    monthlyExpenses,
+    totalExpenses: totalProjectCost,
   };
 }

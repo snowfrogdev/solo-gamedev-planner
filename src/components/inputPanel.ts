@@ -49,7 +49,7 @@ export function createInputPanel(
           </div>
         </div>
       </div>
-      <button class="config-btn" id="openConfigBtn">Configure Downtime Formula</button>
+      <button class="config-btn" id="openConfigBtn">Advanced Settings</button>
     </div>
   `;
 

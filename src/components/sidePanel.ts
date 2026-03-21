@@ -310,6 +310,10 @@ export function createSidePanel(
           <span>Month 1 Units</span>
           <span class="side-panel-value">${Math.round(sales.m1Units).toLocaleString()}</span>
         </div>
+        <div class="side-panel-row">
+          <span>Total Project Cost</span>
+          <span class="side-panel-value">${fmtUsd(sales.totalExpenses)}</span>
+        </div>
         ` : ''}
       </div>
       ${showChart ? `

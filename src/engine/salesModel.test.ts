@@ -68,14 +68,14 @@ describe('computeSalesTimeSeries', () => {
   });
 
   test('early cutoff with small M₁', () => {
-    const series = computeSalesTimeSeries(0, 120, 5, LP, 0.55);
+    const series = computeSalesTimeSeries(0, 120, 5, LP, { tailStrength: 0.55 });
     expect(series.monthlySales.length).toBeLessThan(120);
     expect(series.monthlySales[series.monthlySales.length - 1]).toBeGreaterThanOrEqual(1);
   });
 
   test('tailStrength parameter changes output', () => {
-    const low = computeSalesTimeSeries(0, 120, 500, LP, 0.06);
-    const high = computeSalesTimeSeries(0, 120, 500, LP, 2.4);
+    const low = computeSalesTimeSeries(0, 120, 500, LP, { tailStrength: 0.06 });
+    const high = computeSalesTimeSeries(0, 120, 500, LP, { tailStrength: 2.4 });
     expect(high.cumulativeTotal).toBeGreaterThan(low.cumulativeTotal);
     expect(high.monthlySales[1]).toBeGreaterThan(low.monthlySales[1]);
   });
@@ -111,7 +111,7 @@ describe('computeSalesTimeSeries', () => {
   });
 
   test('early-cutoff milestones snapshot to cumulative total', () => {
-    const series = computeSalesTimeSeries(0, 120, 2, LP, 0.55);
+    const series = computeSalesTimeSeries(0, 120, 2, LP, { tailStrength: 0.55 });
     // Series ends well before month 12
     expect(series.monthlySales.length).toBeLessThan(12);
     expect(series.cumulativeYear1).toBe(series.cumulativeTotal);
@@ -121,7 +121,7 @@ describe('computeSalesTimeSeries', () => {
 
   test('default tailStrength matches explicit 0.55', () => {
     const withDefault = computeSalesTimeSeries(0, 120, 500, LP);
-    const withExplicit = computeSalesTimeSeries(0, 120, 500, LP, 0.55);
+    const withExplicit = computeSalesTimeSeries(0, 120, 500, LP, { tailStrength: 0.55 });
     expect(withDefault.cumulativeTotal).toBe(withExplicit.cumulativeTotal);
     expect(withDefault.monthlySales.length).toBe(withExplicit.monthlySales.length);
   });

@@ -18,6 +18,9 @@ export interface PlannerInputs {
   timeHorizonMonths: number;
   minDevScope: number;
   targetDevScope: number;
+  monthlyFixedExpenses: number;
+  projectCostBase: number;
+  projectCostPerMonth: number;
 }
 
 /** A single generated project in the timeline */
@@ -70,6 +73,8 @@ export interface SalesTimeSeries {
   cumulativeYear1: number;
   cumulativeYear2: number;
   cumulativeYear5: number;
+  monthlyExpenses: number[];     // variable project costs distributed across dev months
+  totalExpenses: number;         // sum of monthlyExpenses
 }
 
 /** A single month's accounting entry (horizon-wide aggregation) */

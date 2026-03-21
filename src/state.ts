@@ -1,4 +1,5 @@
 import type { PlannerInputs, DowntimeConfig } from './types';
+import { DEFAULT_MONTHLY_FIXED_EXPENSES, DEFAULT_PROJECT_COST_BASE, DEFAULT_PROJECT_COST_PER_MONTH } from './engine/expenses';
 import {
   getDefaultSupportCurve,
   getDefaultRecoveryCurve,
@@ -24,6 +25,9 @@ export const state: AppState = {
     timeHorizonMonths: 60,
     minDevScope: 3,
     targetDevScope: 12,
+    monthlyFixedExpenses: DEFAULT_MONTHLY_FIXED_EXPENSES,
+    projectCostBase: DEFAULT_PROJECT_COST_BASE,
+    projectCostPerMonth: DEFAULT_PROJECT_COST_PER_MONTH,
   },
   downtimeConfig: {
     supportCurve: getDefaultSupportCurve(),

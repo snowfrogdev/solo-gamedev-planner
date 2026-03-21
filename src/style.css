@@ -371,6 +371,62 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   height: 0;
 }
 
+.config-section-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-h);
+  margin: 1.25rem 0 0.5rem;
+}
+
+.config-section-title:first-of-type {
+  margin-top: 0;
+}
+
+.config-expense-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.config-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.config-input-row label {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.config-input-field {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.config-input-field input[type="number"] {
+  width: 80px;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-h);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.config-input-field .input-prefix,
+.config-input-field .input-suffix,
+.config-input-field .input-operator {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
 .config-actions {
   display: flex;
   gap: 0.75rem;

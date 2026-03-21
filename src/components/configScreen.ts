@@ -11,8 +11,15 @@ const SUPPORT_COLOR = '#5b9bd5';
 const RECOVERY_COLOR = '#e07050';
 const TOTAL_COLOR = '#999';
 
+export interface ExpenseInputs {
+  monthlyFixedExpenses: number;
+  projectCostBase: number;
+  projectCostPerMonth: number;
+}
+
 export interface ConfigScreenCallbacks {
   onChange: (config: DowntimeConfig) => void;
+  onExpenseChange: (expenses: ExpenseInputs) => void;
   onClose: () => void;
   onReset: () => void;
 }
@@ -40,6 +47,7 @@ function deepCopyCurve(c: BezierCurve): BezierCurve {
 export function createConfigScreen(
   container: HTMLElement,
   config: DowntimeConfig,
+  expenses: ExpenseInputs,
   callbacks: ConfigScreenCallbacks,
 ): { show(): void; hide(): void; destroy(): void } {
   const overlay = document.createElement('div');
@@ -50,9 +58,10 @@ export function createConfigScreen(
 
   modal.innerHTML = `
     <div class="config-header">
-      <h2>Downtime Configuration</h2>
+      <h2>Advanced Settings</h2>
       <button class="close-btn" id="configCloseBtn" aria-label="Close">&times;</button>
     </div>
+    <h3 class="config-section-title">Downtime Formula</h3>
     <p class="config-description">
       Drag handles to shape how downtime scales with project duration.
       Total downtime (dashed) = support + recovery.
@@ -63,6 +72,28 @@ export function createConfigScreen(
       <span class="legend-item"><span class="legend-swatch legend-dashed" style="border-color:${TOTAL_COLOR}"></span>Total downtime</span>
     </div>
     <div id="combinedEditorContainer"></div>
+    <h3 class="config-section-title">Expenses</h3>
+    <div class="config-expense-inputs">
+      <div class="config-input-row">
+        <label for="fixedExpenses">Fixed Monthly Expenses</label>
+        <div class="config-input-field">
+          <span class="input-prefix">$</span>
+          <input type="number" id="fixedExpenses" value="${expenses.monthlyFixedExpenses}" min="0" step="50">
+          <span class="input-suffix">/month</span>
+        </div>
+      </div>
+      <div class="config-input-row">
+        <label>Project Cost Formula</label>
+        <div class="config-input-field formula-field">
+          <span class="input-prefix">$</span>
+          <input type="number" id="projectCostBase" value="${expenses.projectCostBase}" min="0" step="100">
+          <span class="input-operator">+ ( months &times;</span>
+          <span class="input-prefix">$</span>
+          <input type="number" id="projectCostPerMonth" value="${expenses.projectCostPerMonth}" min="0" step="50">
+          <span class="input-suffix">)</span>
+        </div>
+      </div>
+    </div>
     <div class="config-actions">
       <button class="reset-btn" id="configResetBtn">Reset to Default</button>
       <button class="done-btn" id="configDoneBtn">Done</button>
@@ -282,6 +313,23 @@ export function createConfigScreen(
   }));
 
   render();
+
+  // --- Expense inputs ---
+  const fixedExpInput = modal.querySelector<HTMLInputElement>('#fixedExpenses')!;
+  const costBaseInput = modal.querySelector<HTMLInputElement>('#projectCostBase')!;
+  const costPerMonthInput = modal.querySelector<HTMLInputElement>('#projectCostPerMonth')!;
+
+  function emitExpenseChange(): void {
+    callbacks.onExpenseChange({
+      monthlyFixedExpenses: Math.max(0, parseFloat(fixedExpInput.value) || 0),
+      projectCostBase: Math.max(0, parseFloat(costBaseInput.value) || 0),
+      projectCostPerMonth: Math.max(0, parseFloat(costPerMonthInput.value) || 0),
+    });
+  }
+
+  fixedExpInput.addEventListener('change', emitExpenseChange);
+  costBaseInput.addEventListener('change', emitExpenseChange);
+  costPerMonthInput.addEventListener('change', emitExpenseChange);
 
   // --- Modal controls ---
   modal.querySelector('#configCloseBtn')!.addEventListener('click', callbacks.onClose);
