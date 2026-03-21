@@ -1,26 +1,15 @@
 import type { PlannerInputs, PlannedProject, GeneratedPlan, DowntimeBreakdown } from '../types';
 import { defaultDowntime } from './downtimeCalculator';
+import { mulberry32 } from './prng';
 
 export type DowntimeFunction = (devDurationMonths: number) => DowntimeBreakdown;
 
-// --- Seeded PRNG (mulberry32) ---
-
-function mulberry32(seed: number): () => number {
-  let s = seed | 0;
-  return () => {
-    s = (s + 0x6D2B79F5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 function hashInputs(inputs: PlannerInputs): number {
-  // Simple hash combining the three relevant inputs
   let h = 7;
   h = (h * 31 + Math.round(inputs.minDevScope * 100)) | 0;
   h = (h * 31 + Math.round(inputs.targetDevScope * 100)) | 0;
   h = (h * 31 + Math.round(inputs.timeHorizonMonths * 100)) | 0;
+  h = (h * 31 + Math.round(inputs.targetIncome)) | 0;
   return h;
 }
 

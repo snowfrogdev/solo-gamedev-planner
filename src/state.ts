@@ -20,7 +20,7 @@ const listeners: Listener[] = [];
 
 export const state: AppState = {
   inputs: {
-    minIncome: 50000,
+    targetIncome: 50000,
     timeHorizonMonths: 60,
     minDevScope: 3,
     targetDevScope: 12,

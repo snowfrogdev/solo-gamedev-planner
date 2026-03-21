@@ -300,11 +300,17 @@ export function createSidePanel(
       </div>
 
       <div class="side-panel-section">
-        <h3>Pricing</h3>
+        <h3>Pricing & Sales</h3>
         <div class="side-panel-row">
           <span>Launch Price</span>
           <span class="side-panel-value">${fmtUsd(pricing.launchPrice)}</span>
         </div>
+        ${sales ? `
+        <div class="side-panel-row">
+          <span>Month 1 Units</span>
+          <span class="side-panel-value">${Math.round(sales.m1Units).toLocaleString()}</span>
+        </div>
+        ` : ''}
       </div>
       ${showChart ? `
       <div class="side-panel-section">

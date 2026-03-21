@@ -3,7 +3,7 @@ import { generatePlan } from './projectGenerator';
 import type { PlannerInputs } from '../types';
 
 const baseInputs: PlannerInputs = {
-  minIncome: 50000,
+  targetIncome: 50000,
   timeHorizonMonths: 60,
   minDevScope: 3,
   targetDevScope: 12,

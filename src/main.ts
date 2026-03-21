@@ -9,7 +9,9 @@ import { generatePlan } from './engine/projectGenerator';
 import { defaultDowntime, createCustomDowntime } from './engine/downtimeCalculator';
 import { computeLaunchPrice } from './engine/pricingModel';
 import { computeSalesTimeSeries } from './engine/salesModel';
-import type { DowntimeBreakdown, PricingInfo, SalesTimeSeries } from './types';
+import { optimizeM1Values } from './engine/m1Optimizer';
+import { computeAccountingTimeSeries } from './engine/accountingTimeSeries';
+import type { DowntimeBreakdown, PricingInfo, SalesTimeSeries, AccountingTimeSeries } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -80,6 +82,7 @@ const sidePanel = createSidePanel(panelRoot);
 let breakdowns = new Map<number, DowntimeBreakdown>();
 let pricingMap = new Map<number, PricingInfo>();
 let salesMap = new Map<number, SalesTimeSeries>();
+let accounting: AccountingTimeSeries = { entries: [], revenueByProject: [] };
 
 // Timeline
 const timeline = createTimeline(timelineContainer, (project) => {
@@ -104,19 +107,20 @@ function regenerate(): void {
     plan.projects.map((p) => [p.index, computeLaunchPrice(p.devDurationMonths)]),
   );
 
-  // TODO: derive from project scope; 500 units is a stand-in until user-configurable sales inputs exist
-  const PLACEHOLDER_LAUNCH_UNITS = 500;
+  const m1Values = optimizeM1Values(plan.projects, pricingMap, state.inputs);
   salesMap = new Map(
-    plan.projects.map((p) => {
+    plan.projects.map((p, i) => {
       const pricing = pricingMap.get(p.index)!;
       return [
         p.index,
-        computeSalesTimeSeries(p.endMonth, state.inputs.timeHorizonMonths, PLACEHOLDER_LAUNCH_UNITS, pricing.launchPrice),
+        computeSalesTimeSeries(p.endMonth, state.inputs.timeHorizonMonths, m1Values[i], pricing.launchPrice),
       ];
     }),
   );
 
-  timeline.update(plan, state.inputs);
+  accounting = computeAccountingTimeSeries(plan.projects, salesMap, plan.totalMonths);
+
+  timeline.update(plan, state.inputs, accounting);
   sidePanel.hide();
 }
 

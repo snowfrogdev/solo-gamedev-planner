@@ -14,7 +14,7 @@ export interface BezierCurve {
 
 /** User-entered configuration */
 export interface PlannerInputs {
-  minIncome: number;
+  targetIncome: number;
   timeHorizonMonths: number;
   minDevScope: number;
   targetDevScope: number;
@@ -70,4 +70,17 @@ export interface SalesTimeSeries {
   cumulativeYear1: number;
   cumulativeYear2: number;
   cumulativeYear5: number;
+}
+
+/** A single month's accounting entry (horizon-wide aggregation) */
+export interface MonthlyAccountingEntry {
+  revenue: number;
+  expenses: number;
+  netIncome: number;
+}
+
+/** Monthly accounting time series spanning the planning horizon */
+export interface AccountingTimeSeries {
+  entries: MonthlyAccountingEntry[];
+  revenueByProject: number[][];  // [projectIndex][calendarMonth]
 }
