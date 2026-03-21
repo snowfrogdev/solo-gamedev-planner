@@ -108,6 +108,8 @@ Construct a prompt for each reviewer type that includes:
 4. Instruction to follow their standard output format
 5. **Team lead identification**: Tell the reviewer your team lead name so they can send findings back via SendMessage
 
+**IMPORTANT**: Include the **full content** of every new or modified file in the reviewer's prompt. Do not summarize or abbreviate code — reviewers need the complete source to do their job. For modified files, include both the diff and the current full file content. This ensures reviewers can work without needing to run any commands themselves.
+
 ### Step 3.3: Spawn All Reviewers as Teammates
 
 For each discovered reviewer, spawn **one teammate** using the Task tool with team parameters:
