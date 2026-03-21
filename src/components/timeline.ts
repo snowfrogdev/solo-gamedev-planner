@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import type { GeneratedPlan, PlannerInputs } from '../types';
+import type { GeneratedPlan, PlannerInputs, PlannedProject } from '../types';
 
 const MARGIN = { top: 30, right: 20, bottom: 40, left: 50 };
 const BAR_HEIGHT = 32;
@@ -7,6 +7,7 @@ const ROW_HEIGHT = 48;
 
 export function createTimeline(
   container: HTMLElement,
+  onProjectClick?: (project: PlannedProject) => void,
 ): { update(plan: GeneratedPlan, inputs: PlannerInputs): void } {
 
   function update(plan: GeneratedPlan, inputs: PlannerInputs): void {
@@ -66,6 +67,12 @@ export function createTimeline(
       .enter()
       .append('g')
       .attr('class', 'project-group');
+
+    if (onProjectClick) {
+      projects
+        .style('cursor', 'pointer')
+        .on('click', (_event: MouseEvent, d: PlannedProject) => onProjectClick(d));
+    }
 
     const yOffset = (i: number) => MARGIN.top + i * ROW_HEIGHT + (ROW_HEIGHT - BAR_HEIGHT) / 2;
 

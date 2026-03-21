@@ -2,6 +2,7 @@ import './style.css';
 import { state, subscribe, updateState } from './state';
 import { createInputPanel } from './components/inputPanel';
 import { createTimeline } from './components/timeline';
+import { createSidePanel } from './components/sidePanel';
 import { createConfigScreen } from './components/configScreen';
 import { getDefaultSupportCurve, getDefaultRecoveryCurve, getDefaultSupportMax, getDefaultRecoveryMax, DOWNTIME_X_MIN, DOWNTIME_X_MAX } from './engine/downtimeDefaults';
 import { generatePlan } from './engine/projectGenerator';
@@ -15,11 +16,13 @@ app.innerHTML = `
   </header>
   <section id="inputs"></section>
   <section id="timeline"></section>
+  <div id="panel-root"></div>
   <div id="config-root"></div>
 `;
 
 const inputsContainer = app.querySelector<HTMLElement>('#inputs')!;
 const timelineContainer = app.querySelector<HTMLElement>('#timeline')!;
+const panelRoot = app.querySelector<HTMLElement>('#panel-root')!;
 const configRoot = app.querySelector<HTMLElement>('#config-root')!;
 
 // Config screen (lazy init)
@@ -67,17 +70,27 @@ createInputPanel(inputsContainer, state.inputs, {
   onOpenConfig: openConfig,
 });
 
+// Side panel
+const panel = createSidePanel(panelRoot);
+
+// Current downtime function (updated on regenerate, used by panel click handler)
+let currentDowntimeFn: (d: number) => ReturnType<typeof defaultDowntime> = defaultDowntime;
+
 // Timeline
-const timeline = createTimeline(timelineContainer);
+const timeline = createTimeline(timelineContainer, (project) => {
+  const breakdown = currentDowntimeFn(project.devDurationMonths);
+  panel.show(project, breakdown);
+});
 
 // React to state changes
 function regenerate(): void {
-  const downtimeFn = state.useCustomDowntime
+  currentDowntimeFn = state.useCustomDowntime
     ? createCustomDowntime(state.downtimeConfig)
     : defaultDowntime;
 
-  const plan = generatePlan(state.inputs, (d) => downtimeFn(d));
+  const plan = generatePlan(state.inputs, (d) => currentDowntimeFn(d));
   timeline.update(plan, state.inputs);
+  panel.hide();
 }
 
 subscribe(regenerate);
