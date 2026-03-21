@@ -52,3 +52,12 @@ export interface DowntimeBreakdown {
   postLaunchSupport: number;
   creativeRecovery: number;
 }
+
+/** Pricing info for a single project */
+export interface PricingInfo {
+  launchPrice: number;
+  rawPrice: number;
+  aepMonth1: number;
+  aepYear1: number;
+  aepYear3: number;
+}

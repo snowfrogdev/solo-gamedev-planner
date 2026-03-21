@@ -1,12 +1,16 @@
-import type { PlannedProject, DowntimeBreakdown } from '../types';
+import type { PlannedProject, DowntimeBreakdown, PricingInfo } from '../types';
 
 function fmt(n: number): string {
   return n.toFixed(1);
 }
 
+function fmtUsd(n: number): string {
+  return `$${n.toFixed(2)}`;
+}
+
 export function createSidePanel(
   container: HTMLElement,
-): { show(project: PlannedProject, breakdown: DowntimeBreakdown): void; hide(): void; destroy(): void } {
+): { show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo): void; hide(): void; destroy(): void } {
   const overlay = document.createElement('div');
   overlay.className = 'side-panel-overlay';
 
@@ -29,7 +33,7 @@ export function createSidePanel(
     overlay.classList.remove('visible');
   }
 
-  function show(project: PlannedProject, breakdown: DowntimeBreakdown): void {
+  function show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo): void {
     const cycleDuration = project.devDurationMonths + project.downtimeMonths;
 
     panel.innerHTML = `
@@ -84,7 +88,22 @@ export function createSidePanel(
 
       <div class="side-panel-section">
         <h3>Financial</h3>
-        <p class="side-panel-coming-soon">Coming soon</p>
+        <div class="side-panel-row">
+          <span>Launch Price</span>
+          <span class="side-panel-value">${fmtUsd(pricing.launchPrice)}</span>
+        </div>
+        <div class="side-panel-row sub">
+          <span>Month 1 AEP</span>
+          <span class="side-panel-value">${fmtUsd(pricing.aepMonth1)}</span>
+        </div>
+        <div class="side-panel-row sub">
+          <span>Year 1 AEP</span>
+          <span class="side-panel-value">${fmtUsd(pricing.aepYear1)}</span>
+        </div>
+        <div class="side-panel-row sub">
+          <span>Year 3 AEP</span>
+          <span class="side-panel-value">${fmtUsd(pricing.aepYear3)}</span>
+        </div>
       </div>
     `;
 

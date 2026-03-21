@@ -7,7 +7,8 @@ import { createConfigScreen } from './components/configScreen';
 import { getDefaultSupportCurve, getDefaultRecoveryCurve, getDefaultSupportMax, getDefaultRecoveryMax, DOWNTIME_X_MIN, DOWNTIME_X_MAX } from './engine/downtimeDefaults';
 import { generatePlan } from './engine/projectGenerator';
 import { defaultDowntime, createCustomDowntime } from './engine/downtimeCalculator';
-import type { DowntimeBreakdown } from './types';
+import { computeLaunchPrice } from './engine/pricingModel';
+import type { DowntimeBreakdown, PricingInfo } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -74,13 +75,15 @@ createInputPanel(inputsContainer, state.inputs, {
 // Side panel
 const sidePanel = createSidePanel(panelRoot);
 
-// Pre-computed downtime breakdowns per project (rebuilt on regenerate)
+// Pre-computed per-project data (rebuilt on regenerate)
 let breakdowns = new Map<number, DowntimeBreakdown>();
+let pricingMap = new Map<number, PricingInfo>();
 
 // Timeline
 const timeline = createTimeline(timelineContainer, (project) => {
   const breakdown = breakdowns.get(project.index);
-  if (breakdown) sidePanel.show(project, breakdown);
+  const pricing = pricingMap.get(project.index);
+  if (breakdown && pricing) sidePanel.show(project, breakdown, pricing);
 });
 
 // React to state changes
@@ -93,6 +96,9 @@ function regenerate(): void {
 
   breakdowns = new Map(
     plan.projects.map((p) => [p.index, downtimeFn(p.devDurationMonths)]),
+  );
+  pricingMap = new Map(
+    plan.projects.map((p) => [p.index, computeLaunchPrice(p.devDurationMonths)]),
   );
 
   timeline.update(plan, state.inputs);
