@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { GlobalWindow } from 'happy-dom';
 import { createSidePanel } from './sidePanel';
-import type { PlannedProject, DowntimeBreakdown } from '../types';
+import type { PlannedProject, DowntimeBreakdown, PricingInfo } from '../types';
 
 const project: PlannedProject = {
   index: 2,
@@ -16,6 +16,14 @@ const breakdown: DowntimeBreakdown = {
   total: 1.5,
   postLaunchSupport: 1.0,
   creativeRecovery: 0.5,
+};
+
+const pricing: PricingInfo = {
+  launchPrice: 4.99,
+  rawPrice: 3.20,
+  aepMonth1: 3.67,
+  aepYear1: 2.63,
+  aepYear3: 1.22,
 };
 
 let window: InstanceType<typeof GlobalWindow>;
@@ -37,7 +45,7 @@ afterEach(() => {
 describe('createSidePanel', () => {
   test('show() renders correct values and adds visible class', () => {
     const panel = createSidePanel(container);
-    panel.show(project, breakdown);
+    panel.show(project, breakdown, pricing);
 
     const overlay = container.querySelector('.side-panel-overlay')!;
     expect(overlay.classList.contains('visible')).toBe(true);
@@ -59,7 +67,7 @@ describe('createSidePanel', () => {
 
   test('show() renders correct project number (1-indexed)', () => {
     const panel = createSidePanel(container);
-    panel.show(project, breakdown);
+    panel.show(project, breakdown, pricing);
 
     const heading = container.querySelector('.side-panel-header h2')!;
     expect(heading.textContent).toBe('Game #3');
@@ -69,7 +77,7 @@ describe('createSidePanel', () => {
 
   test('hide() removes visible class', () => {
     const panel = createSidePanel(container);
-    panel.show(project, breakdown);
+    panel.show(project, breakdown, pricing);
 
     const overlay = container.querySelector('.side-panel-overlay')!;
     expect(overlay.classList.contains('visible')).toBe(true);
@@ -82,7 +90,7 @@ describe('createSidePanel', () => {
 
   test('overlay click dismisses panel', () => {
     const panel = createSidePanel(container);
-    panel.show(project, breakdown);
+    panel.show(project, breakdown, pricing);
 
     const overlay = container.querySelector('.side-panel-overlay')!;
     overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -93,7 +101,7 @@ describe('createSidePanel', () => {
 
   test('clicking inside panel does not dismiss', () => {
     const panel = createSidePanel(container);
-    panel.show(project, breakdown);
+    panel.show(project, breakdown, pricing);
 
     const aside = container.querySelector('.side-panel')!;
     aside.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -106,7 +114,7 @@ describe('createSidePanel', () => {
 
   test('close button dismisses panel', () => {
     const panel = createSidePanel(container);
-    panel.show(project, breakdown);
+    panel.show(project, breakdown, pricing);
 
     const closeBtn = container.querySelector('.close-btn')!;
     closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: false }));
@@ -119,7 +127,7 @@ describe('createSidePanel', () => {
 
   test('Escape key dismisses panel', () => {
     const panel = createSidePanel(container);
-    panel.show(project, breakdown);
+    panel.show(project, breakdown, pricing);
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 
@@ -129,9 +137,21 @@ describe('createSidePanel', () => {
     panel.destroy();
   });
 
+  test('show() renders pricing info', () => {
+    const panel = createSidePanel(container);
+    panel.show(project, breakdown, pricing);
+
+    const values = Array.from(container.querySelectorAll('.side-panel-value'))
+      .map((el) => el.textContent!.trim());
+
+    expect(values).toContain('$4.99'); // Launch Price
+
+    panel.destroy();
+  });
+
   test('destroy() removes DOM elements', () => {
     const panel = createSidePanel(container);
-    panel.show(project, breakdown);
+    panel.show(project, breakdown, pricing);
 
     expect(container.querySelector('.side-panel-overlay')).not.toBeNull();
 
