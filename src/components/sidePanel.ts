@@ -6,7 +6,7 @@ function fmt(n: number): string {
 
 export function createSidePanel(
   container: HTMLElement,
-): { show(project: PlannedProject, breakdown: DowntimeBreakdown): void; hide(): void } {
+): { show(project: PlannedProject, breakdown: DowntimeBreakdown): void; hide(): void; destroy(): void } {
   const overlay = document.createElement('div');
   overlay.className = 'side-panel-overlay';
 
@@ -19,6 +19,11 @@ export function createSidePanel(
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) hide();
   });
+
+  function onKeyDown(e: KeyboardEvent): void {
+    if (e.key === 'Escape') hide();
+  }
+  document.addEventListener('keydown', onKeyDown);
 
   function hide(): void {
     overlay.classList.remove('visible');
@@ -87,5 +92,10 @@ export function createSidePanel(
     overlay.classList.add('visible');
   }
 
-  return { show, hide };
+  function destroy(): void {
+    document.removeEventListener('keydown', onKeyDown);
+    overlay.remove();
+  }
+
+  return { show, hide, destroy };
 }

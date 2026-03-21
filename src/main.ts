@@ -7,6 +7,7 @@ import { createConfigScreen } from './components/configScreen';
 import { getDefaultSupportCurve, getDefaultRecoveryCurve, getDefaultSupportMax, getDefaultRecoveryMax, DOWNTIME_X_MIN, DOWNTIME_X_MAX } from './engine/downtimeDefaults';
 import { generatePlan } from './engine/projectGenerator';
 import { defaultDowntime, createCustomDowntime } from './engine/downtimeCalculator';
+import type { DowntimeBreakdown } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -71,26 +72,31 @@ createInputPanel(inputsContainer, state.inputs, {
 });
 
 // Side panel
-const panel = createSidePanel(panelRoot);
+const sidePanel = createSidePanel(panelRoot);
 
-// Current downtime function (updated on regenerate, used by panel click handler)
-let currentDowntimeFn: (d: number) => ReturnType<typeof defaultDowntime> = defaultDowntime;
+// Pre-computed downtime breakdowns per project (rebuilt on regenerate)
+let breakdowns = new Map<number, DowntimeBreakdown>();
 
 // Timeline
 const timeline = createTimeline(timelineContainer, (project) => {
-  const breakdown = currentDowntimeFn(project.devDurationMonths);
-  panel.show(project, breakdown);
+  const breakdown = breakdowns.get(project.index);
+  if (breakdown) sidePanel.show(project, breakdown);
 });
 
 // React to state changes
 function regenerate(): void {
-  currentDowntimeFn = state.useCustomDowntime
+  const downtimeFn = state.useCustomDowntime
     ? createCustomDowntime(state.downtimeConfig)
     : defaultDowntime;
 
-  const plan = generatePlan(state.inputs, (d) => currentDowntimeFn(d));
+  const plan = generatePlan(state.inputs, (d) => downtimeFn(d));
+
+  breakdowns = new Map(
+    plan.projects.map((p) => [p.index, downtimeFn(p.devDurationMonths)]),
+  );
+
   timeline.update(plan, state.inputs);
-  panel.hide();
+  sidePanel.hide();
 }
 
 subscribe(regenerate);
