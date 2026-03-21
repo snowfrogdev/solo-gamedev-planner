@@ -173,4 +173,13 @@ describe('generatePlan', () => {
     );
     expect(targetProject).toBeDefined();
   });
+
+  test('different inputs produce different plans', () => {
+    const plan1 = generatePlan(baseInputs);
+    const plan2 = generatePlan({ ...baseInputs, targetDevScope: 18 });
+    // At minimum, total months or project count should differ
+    const same = plan1.projects.length === plan2.projects.length
+      && Math.abs(plan1.totalMonths - plan2.totalMonths) < 0.01;
+    expect(same).toBe(false);
+  });
 });

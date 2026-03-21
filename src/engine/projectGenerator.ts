@@ -1,16 +1,17 @@
 import type { PlannerInputs, PlannedProject, GeneratedPlan, DowntimeBreakdown } from '../types';
 import { defaultDowntime } from './downtimeCalculator';
 import { mulberry32 } from './prng';
+import { smoothness } from './optimizerUtils';
 
 export type DowntimeFunction = (devDurationMonths: number) => DowntimeBreakdown;
 
 function hashInputs(inputs: PlannerInputs): number {
-  let h = 7;
-  h = (h * 31 + Math.round(inputs.minDevScope * 100)) | 0;
-  h = (h * 31 + Math.round(inputs.targetDevScope * 100)) | 0;
-  h = (h * 31 + Math.round(inputs.timeHorizonMonths * 100)) | 0;
-  h = (h * 31 + Math.round(inputs.targetIncome)) | 0;
-  return h;
+  let hash = 7;
+  hash = (hash * 31 + Math.round(inputs.minDevScope * 100)) | 0;
+  hash = (hash * 31 + Math.round(inputs.targetDevScope * 100)) | 0;
+  hash = (hash * 31 + Math.round(inputs.timeHorizonMonths * 100)) | 0;
+  hash = (hash * 31 + Math.round(inputs.targetIncome)) | 0;
+  return hash;
 }
 
 // --- Helpers ---
@@ -27,21 +28,21 @@ function buildSequence(
   getDowntime: DowntimeFunction,
 ): PlannedProject[] {
   const projects: PlannedProject[] = [];
-  let t = 0;
+  let currentMonth = 0;
   for (let i = 0; i < durations.length; i++) {
     const dev = durations[i];
-    const end = t + dev;
+    const end = currentMonth + dev;
     const down = getDowntime(dev);
-    const available = end + down.total;
+    const cycleEnd = end + down.total;
     projects.push({
       index: i,
-      startMonth: t,
+      startMonth: currentMonth,
       devDurationMonths: dev,
       endMonth: end,
       downtimeMonths: down.total,
-      cycleEndMonth: available,
+      cycleEndMonth: cycleEnd,
     });
-    t = available;
+    currentMonth = cycleEnd;
   }
   return projects;
 }
@@ -51,8 +52,8 @@ function totalTimeForDurations(
   getDowntime: DowntimeFunction,
 ): number {
   let total = 0;
-  for (const d of durations) {
-    total += d + getDowntime(d).total;
+  for (const dur of durations) {
+    total += dur + getDowntime(dur).total;
   }
   return total;
 }
@@ -79,19 +80,7 @@ function fitness(
   }
 
   // Smoothness: how close are project durations to a linear ramp
-  let smoothness = 1;
-  if (durations.length >= 3) {
-    const first = durations[0];
-    const last = durations[durations.length - 1];
-    const range = last - first;
-    let totalDeviation = 0;
-    for (let i = 1; i < durations.length - 1; i++) {
-      const idealValue = first + (i / (durations.length - 1)) * range;
-      totalDeviation += Math.abs(durations[i] - idealValue);
-    }
-    const maxDeviation = range * (durations.length - 2);
-    smoothness = maxDeviation > 0 ? Math.max(0, 1 - totalDeviation / maxDeviation) : 1;
-  }
+  const smooth = smoothness(durations);
 
   // Target reachability: a target-scope project starts before the horizon
   let targetReachability = 0;
@@ -103,7 +92,7 @@ function fitness(
   }
 
   // Horizon coverage weighted 2x because it's the hard constraint
-  return (2 * horizonCoverage + smoothness + targetReachability) / 4;
+  return (2 * horizonCoverage + smooth + targetReachability) / 4;
 }
 
 // --- Constraints ---

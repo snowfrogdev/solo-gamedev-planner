@@ -10,7 +10,7 @@ import { defaultDowntime, createCustomDowntime } from './engine/downtimeCalculat
 import { computeLaunchPrice } from './engine/pricingModel';
 import { computeSalesTimeSeries } from './engine/salesModel';
 import { optimizeM1Values } from './engine/m1Optimizer';
-import { computeAccountingTimeSeries } from './engine/accountingTimeSeries';
+import { computeAccountingTimeSeries, computeAnnualizedIncome } from './engine/accountingTimeSeries';
 import { DEFAULT_MONTHLY_FIXED_EXPENSES, DEFAULT_PROJECT_COST_BASE, DEFAULT_PROJECT_COST_PER_MONTH } from './engine/expenses';
 import type { DowntimeBreakdown, PricingInfo, SalesTimeSeries, AccountingTimeSeries } from './types';
 
@@ -139,7 +139,11 @@ function regenerate(): void {
 
   accounting = computeAccountingTimeSeries(plan.projects, salesMap, plan.totalMonths, state.inputs);
 
-  timeline.update(plan, state.inputs, accounting);
+  const annualizedIncome = accounting.entries.length > 0
+    ? computeAnnualizedIncome(accounting, state.inputs.timeHorizonMonths, state.inputs.targetDevScope)
+    : 0;
+
+  timeline.update(plan, state.inputs, accounting, annualizedIncome);
   sidePanel.hide();
 }
 

@@ -1,7 +1,8 @@
 import * as d3 from 'd3';
 import type { PlannedProject, DowntimeBreakdown, PricingInfo, SalesTimeSeries } from '../types';
+import { fmtCompact } from '../utils/format';
 
-function fmt(n: number): string {
+function fmtMonths(n: number): string {
   return n.toFixed(1);
 }
 
@@ -9,12 +10,21 @@ function fmtUsd(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+// --- Chart constants ---
+
 const CHART_MARGIN = { top: 12, right: 48, bottom: 28, left: 48 };
 const CHART_HEIGHT = 280;
 const CHART_COLORS = { units: '#5b9bd5', revenue: '#70ad47', price: '#ed7d31' };
 
+interface ChartDimensions { innerW: number; innerH: number; width: number; }
+
 type ChartDataPoint = { month: number; units: number; price: number; revenue: number };
 
+// --- Chart scales ---
+
+/** Creates X, left-Y (log), and right-Y (linear) scales for the revenue chart.
+ *  Log scale is used for units/revenue because sales decay follows an exponential
+ *  tail — log scale keeps both the launch spike and long-tail visible. */
 function createChartScales(data: ChartDataPoint[], innerW: number, innerH: number) {
   const months = data.length;
 
@@ -39,6 +49,8 @@ function createChartScales(data: ChartDataPoint[], innerW: number, innerH: numbe
   return { xScale, leftScale, rightScale };
 }
 
+// --- Chart axes ---
+
 function drawChartAxes(
   g: d3.Selection<SVGGElement, unknown, null, undefined>,
   scales: ReturnType<typeof createChartScales>,
@@ -61,6 +73,8 @@ function drawChartAxes(
     .attr('transform', `translate(${innerW},0)`)
     .call(d3.axisRight(scales.rightScale).ticks(5).tickFormat((d) => `$${(d as number).toFixed(0)}`));
 }
+
+// --- Chart lines ---
 
 function drawChartLines(
   g: d3.Selection<SVGGElement, unknown, null, undefined>,
@@ -85,6 +99,8 @@ function drawChartLines(
       .attr('d', d3.line<ChartDataPoint>().x((d) => xScale(d.month)).y(line.y));
   }
 }
+
+// --- Chart legend ---
 
 function addChartLegend(
   svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
@@ -116,16 +132,17 @@ function addChartLegend(
   });
 }
 
+// --- Chart tooltip ---
+
 function addChartTooltip(
   g: d3.Selection<SVGGElement, unknown, null, undefined>,
   chartContainer: HTMLElement,
   data: ChartDataPoint[],
   scales: ReturnType<typeof createChartScales>,
-  innerW: number,
-  innerH: number,
-  width: number,
+  dims: ChartDimensions,
 ): void {
   const { xScale, leftScale, rightScale } = scales;
+  const { innerW, innerH, width } = dims;
 
   const crosshair = g.append('line')
     .attr('class', 'chart-crosshair')
@@ -143,8 +160,6 @@ function addChartTooltip(
     .append('div')
     .attr('class', 'chart-tooltip')
     .style('display', 'none');
-
-  const fmtCompact = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : Math.round(n).toString();
 
   g.append('rect')
     .attr('class', 'chart-hover-zone')
@@ -172,7 +187,7 @@ function addChartTooltip(
         .html(
           `<strong>Month ${d.month}</strong><br>` +
           `<span style="color:${CHART_COLORS.units}">Units:</span> ${fmtCompact(d.units)}<br>` +
-          `<span style="color:${CHART_COLORS.revenue}">Revenue:</span> $${fmtCompact(d.revenue)}<br>` +
+          `<span style="color:${CHART_COLORS.revenue}">Revenue:</span> ${fmtCompact(d.revenue, '$')}<br>` +
           `<span style="color:${CHART_COLORS.price}">Price:</span> $${d.price.toFixed(2)}`
         );
     })
@@ -184,6 +199,8 @@ function addChartTooltip(
       tooltip.style('display', 'none');
     });
 }
+
+// --- Chart orchestrator ---
 
 function renderRevenueChart(
   chartContainer: HTMLElement,
@@ -217,8 +234,10 @@ function renderRevenueChart(
   drawChartAxes(g, scales, months, innerW, innerH);
   drawChartLines(g, data, scales);
   addChartLegend(svg, width);
-  addChartTooltip(g, chartContainer, data, scales, innerW, innerH, width);
+  addChartTooltip(g, chartContainer, data, scales, { innerW, innerH, width });
 }
+
+// --- Side panel factory ---
 
 export function createSidePanel(
   container: HTMLElement,
@@ -259,15 +278,15 @@ export function createSidePanel(
         <h3>Scope</h3>
         <div class="side-panel-row">
           <span>Dev Duration</span>
-          <span class="side-panel-value">${fmt(project.devDurationMonths)} mo</span>
+          <span class="side-panel-value">${fmtMonths(project.devDurationMonths)} mo</span>
         </div>
         <div class="side-panel-row">
           <span>Start</span>
-          <span class="side-panel-value">Month ${fmt(project.startMonth)}</span>
+          <span class="side-panel-value">Month ${fmtMonths(project.startMonth)}</span>
         </div>
         <div class="side-panel-row">
           <span>End</span>
-          <span class="side-panel-value">Month ${fmt(project.endMonth)}</span>
+          <span class="side-panel-value">Month ${fmtMonths(project.endMonth)}</span>
         </div>
       </div>
 
@@ -275,15 +294,15 @@ export function createSidePanel(
         <h3>Downtime</h3>
         <div class="side-panel-row">
           <span>Total</span>
-          <span class="side-panel-value">${fmt(breakdown.total)} mo</span>
+          <span class="side-panel-value">${fmtMonths(breakdown.total)} mo</span>
         </div>
         <div class="side-panel-row sub">
           <span>Post-Launch Support</span>
-          <span class="side-panel-value">${fmt(breakdown.postLaunchSupport)} mo</span>
+          <span class="side-panel-value">${fmtMonths(breakdown.postLaunchSupport)} mo</span>
         </div>
         <div class="side-panel-row sub">
           <span>Creative Recovery</span>
-          <span class="side-panel-value">${fmt(breakdown.creativeRecovery)} mo</span>
+          <span class="side-panel-value">${fmtMonths(breakdown.creativeRecovery)} mo</span>
         </div>
       </div>
 
@@ -291,11 +310,11 @@ export function createSidePanel(
         <h3>Cycle</h3>
         <div class="side-panel-row">
           <span>Total Cycle</span>
-          <span class="side-panel-value">${fmt(cycleDuration)} mo</span>
+          <span class="side-panel-value">${fmtMonths(cycleDuration)} mo</span>
         </div>
         <div class="side-panel-row">
           <span>Cycle End</span>
-          <span class="side-panel-value">Month ${fmt(project.cycleEndMonth)}</span>
+          <span class="side-panel-value">Month ${fmtMonths(project.cycleEndMonth)}</span>
         </div>
       </div>
 

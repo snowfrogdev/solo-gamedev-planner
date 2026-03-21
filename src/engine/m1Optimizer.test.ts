@@ -98,4 +98,25 @@ describe('optimizeM1Values', () => {
     const m1Values = optimizeM1Values([], new Map(), baseInputs);
     expect(m1Values).toEqual([]);
   });
+
+  test('targetIncome of 0 returns valid array without throwing', () => {
+    const { plan, pricingMap } = buildMaps({ ...baseInputs, targetIncome: 0 });
+    const m1Values = optimizeM1Values(plan.projects, pricingMap, { ...baseInputs, targetIncome: 0 });
+    expect(m1Values.length).toBe(plan.projects.length);
+    for (const v of m1Values) {
+      expect(v).toBeGreaterThanOrEqual(1);
+      expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+
+  test('M1 values form a roughly smooth progression', () => {
+    const { plan, pricingMap } = buildMaps(baseInputs);
+    const m1Values = optimizeM1Values(plan.projects, pricingMap, baseInputs);
+    if (m1Values.length >= 3) {
+      // No single jump should be more than 5x the previous value
+      for (let i = 1; i < m1Values.length; i++) {
+        expect(m1Values[i]).toBeLessThanOrEqual(m1Values[i - 1] * 5);
+      }
+    }
+  });
 });

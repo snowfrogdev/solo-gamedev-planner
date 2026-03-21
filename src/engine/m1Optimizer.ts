@@ -2,17 +2,18 @@ import type { PlannerInputs, PlannedProject, PricingInfo } from '../types';
 import { mulberry32 } from './prng';
 import { computeSalesTimeSeries } from './salesModel';
 import { computeAccountingTimeSeries, computeAnnualizedIncome } from './accountingTimeSeries';
+import { smoothness } from './optimizerUtils';
 
 const MAX_ITERATIONS = 2000;
 const M1_FLOOR = 1;
 
 function hashM1Inputs(inputs: PlannerInputs, projectCount: number): number {
-  let h = 13;
-  h = (h * 31 + Math.round(inputs.targetIncome)) | 0;
-  h = (h * 31 + projectCount) | 0;
-  h = (h * 31 + Math.round(inputs.timeHorizonMonths * 100)) | 0;
-  h = (h * 31 + Math.round(inputs.targetDevScope * 100)) | 0;
-  return h;
+  let hash = 13;
+  hash = (hash * 31 + Math.round(inputs.targetIncome)) | 0;
+  hash = (hash * 31 + projectCount) | 0;
+  hash = (hash * 31 + Math.round(inputs.timeHorizonMonths * 100)) | 0;
+  hash = (hash * 31 + Math.round(inputs.targetDevScope * 100)) | 0;
+  return hash;
 }
 
 /** Build sales + accounting and compute annualized income for a candidate M₁ vector */
@@ -38,29 +39,19 @@ function evaluateAnnualizedIncome(
   return computeAnnualizedIncome(accounting, horizon, inputs.targetDevScope);
 }
 
-/** Smoothness score (0-1): deviation from linear ramp, same formula as duration optimizer */
-function smoothness(values: number[]): number {
-  if (values.length < 3) return 1;
-  const first = values[0];
-  const last = values[values.length - 1];
-  const range = last - first;
-  let totalDeviation = 0;
-  for (let i = 1; i < values.length - 1; i++) {
-    const ideal = first + (i / (values.length - 1)) * range;
-    totalDeviation += Math.abs(values[i] - ideal);
-  }
-  const maxDeviation = range * (values.length - 2);
-  return maxDeviation > 0 ? Math.max(0, 1 - totalDeviation / maxDeviation) : 1;
-}
-
 function m1Fitness(
   m1Values: number[],
   projects: PlannedProject[],
   pricingMap: Map<number, PricingInfo>,
   inputs: PlannerInputs,
 ): number {
+  if (inputs.targetIncome <= 0) return 0;
+
   const annualized = evaluateAnnualizedIncome(m1Values, projects, pricingMap, inputs);
   const ratio = annualized / inputs.targetIncome;
+  // Asymmetric penalty: undershooting penalised linearly (ratio 0.5 → coverage 0.5),
+  // overshooting penalised at 0.5× rate (ratio 1.5 → coverage 0.75) so the optimizer
+  // slightly prefers overshooting but still converges toward the target.
   const coverage = ratio <= 1 ? ratio : Math.max(0, 1 - (ratio - 1) * 0.5);
   const smooth = smoothness(m1Values);
   return (2 * coverage + smooth) / 3;

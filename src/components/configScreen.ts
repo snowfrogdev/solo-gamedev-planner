@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import type { BezierCurve, Point, DowntimeConfig } from '../types';
+import type { BezierCurve, Point, DowntimeConfig, PlannerInputs } from '../types';
 import { createInterpolator } from '../engine/curveInterpolator';
 import { DOWNTIME_X_MIN, DOWNTIME_X_MAX } from '../engine/downtimeDefaults';
 
@@ -11,11 +11,7 @@ const SUPPORT_COLOR = '#5b9bd5';
 const RECOVERY_COLOR = '#e07050';
 const TOTAL_COLOR = '#999';
 
-export interface ExpenseInputs {
-  monthlyFixedExpenses: number;
-  projectCostBase: number;
-  projectCostPerMonth: number;
-}
+export type ExpenseInputs = Pick<PlannerInputs, 'monthlyFixedExpenses' | 'projectCostBase' | 'projectCostPerMonth'>;
 
 export interface ConfigScreenCallbacks {
   onChange: (config: DowntimeConfig) => void;
@@ -27,7 +23,7 @@ export interface ConfigScreenCallbacks {
 /**
  * Sample a bezier curve into real-world y values at evenly spaced x positions.
  */
-function sampleBezier(curve: BezierCurve, maxOutput: number, count: number): number[] {
+export function sampleBezier(curve: BezierCurve, maxOutput: number, count: number): number[] {
   const interp = createInterpolator(curve);
   const values: number[] = [];
   for (let i = 0; i <= count; i++) {
@@ -36,11 +32,11 @@ function sampleBezier(curve: BezierCurve, maxOutput: number, count: number): num
   return values;
 }
 
-function clamp(val: number, min: number, max: number): number {
+export function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
-function deepCopyCurve(c: BezierCurve): BezierCurve {
+export function deepCopyCurve(c: BezierCurve): BezierCurve {
   return { p0: { ...c.p0 }, cp1: { ...c.cp1 }, cp2: { ...c.cp2 }, p3: { ...c.p3 } };
 }
 
@@ -59,7 +55,7 @@ export function createConfigScreen(
   modal.innerHTML = `
     <div class="config-header">
       <h2>Advanced Settings</h2>
-      <button class="close-btn" id="configCloseBtn" aria-label="Close">&times;</button>
+      <button class="config-close-btn close-btn" aria-label="Close">&times;</button>
     </div>
     <h3 class="config-section-title">Downtime Formula</h3>
     <p class="config-description">
@@ -71,14 +67,14 @@ export function createConfigScreen(
       <span class="legend-item"><span class="legend-swatch" style="background:${RECOVERY_COLOR}"></span>Creative recovery</span>
       <span class="legend-item"><span class="legend-swatch legend-dashed" style="border-color:${TOTAL_COLOR}"></span>Total downtime</span>
     </div>
-    <div id="combinedEditorContainer"></div>
+    <div class="config-editor-container"></div>
     <h3 class="config-section-title">Expenses</h3>
     <div class="config-expense-inputs">
       <div class="config-input-row">
-        <label for="fixedExpenses">Fixed Monthly Expenses</label>
+        <label>Fixed Monthly Expenses</label>
         <div class="config-input-field">
           <span class="input-prefix">$</span>
-          <input type="number" id="fixedExpenses" value="${expenses.monthlyFixedExpenses}" min="0" step="50">
+          <input type="number" data-field="fixedExpenses" value="${expenses.monthlyFixedExpenses}" min="0" step="50">
           <span class="input-suffix">/month</span>
         </div>
       </div>
@@ -86,17 +82,17 @@ export function createConfigScreen(
         <label>Project Cost Formula</label>
         <div class="config-input-field formula-field">
           <span class="input-prefix">$</span>
-          <input type="number" id="projectCostBase" value="${expenses.projectCostBase}" min="0" step="100">
+          <input type="number" data-field="projectCostBase" value="${expenses.projectCostBase}" min="0" step="100">
           <span class="input-operator">+ ( months &times;</span>
           <span class="input-prefix">$</span>
-          <input type="number" id="projectCostPerMonth" value="${expenses.projectCostPerMonth}" min="0" step="50">
+          <input type="number" data-field="projectCostPerMonth" value="${expenses.projectCostPerMonth}" min="0" step="50">
           <span class="input-suffix">)</span>
         </div>
       </div>
     </div>
     <div class="config-actions">
-      <button class="reset-btn" id="configResetBtn">Reset to Default</button>
-      <button class="done-btn" id="configDoneBtn">Done</button>
+      <button class="config-reset-btn reset-btn">Reset to Default</button>
+      <button class="config-done-btn done-btn">Done</button>
     </div>
   `;
 
@@ -110,7 +106,7 @@ export function createConfigScreen(
   };
 
   // --- Build the combined SVG ---
-  const svgContainer = modal.querySelector<HTMLElement>('#combinedEditorContainer')!;
+  const svgContainer = modal.querySelector<HTMLElement>('.config-editor-container')!;
   const width = 460;
   const height = 300;
   const innerWidth = width - MARGIN.left - MARGIN.right;
@@ -182,30 +178,30 @@ export function createConfigScreen(
   const recoveryCP2 = g.append('circle').attr('class', 'control-handle').attr('r', 4).attr('fill', RECOVERY_COLOR).attr('stroke', 'white').attr('stroke-width', 1.5).attr('opacity', 0.7);
 
   function render(): void {
-    const supCurve = currentConfig.supportCurve;
-    const recCurve = currentConfig.recoveryCurve;
+    const supportCurve = currentConfig.supportCurve;
+    const recoveryCurve = currentConfig.recoveryCurve;
 
     // Support bezier
-    supportPath.attr('d', `M ${toPixelX(supCurve.p0)},${toPixelYSupport(supCurve.p0)} C ${toPixelX(supCurve.cp1)},${toPixelYSupport(supCurve.cp1)} ${toPixelX(supCurve.cp2)},${toPixelYSupport(supCurve.cp2)} ${toPixelX(supCurve.p3)},${toPixelYSupport(supCurve.p3)}`);
-    supportHandleLineStart.attr('x1', toPixelX(supCurve.p0)).attr('y1', toPixelYSupport(supCurve.p0)).attr('x2', toPixelX(supCurve.cp1)).attr('y2', toPixelYSupport(supCurve.cp1));
-    supportHandleLineEnd.attr('x1', toPixelX(supCurve.p3)).attr('y1', toPixelYSupport(supCurve.p3)).attr('x2', toPixelX(supCurve.cp2)).attr('y2', toPixelYSupport(supCurve.cp2));
-    supportP0.attr('cx', toPixelX(supCurve.p0)).attr('cy', toPixelYSupport(supCurve.p0));
-    supportP3.attr('cx', toPixelX(supCurve.p3)).attr('cy', toPixelYSupport(supCurve.p3));
-    supportCP1.attr('cx', toPixelX(supCurve.cp1)).attr('cy', toPixelYSupport(supCurve.cp1));
-    supportCP2.attr('cx', toPixelX(supCurve.cp2)).attr('cy', toPixelYSupport(supCurve.cp2));
+    supportPath.attr('d', `M ${toPixelX(supportCurve.p0)},${toPixelYSupport(supportCurve.p0)} C ${toPixelX(supportCurve.cp1)},${toPixelYSupport(supportCurve.cp1)} ${toPixelX(supportCurve.cp2)},${toPixelYSupport(supportCurve.cp2)} ${toPixelX(supportCurve.p3)},${toPixelYSupport(supportCurve.p3)}`);
+    supportHandleLineStart.attr('x1', toPixelX(supportCurve.p0)).attr('y1', toPixelYSupport(supportCurve.p0)).attr('x2', toPixelX(supportCurve.cp1)).attr('y2', toPixelYSupport(supportCurve.cp1));
+    supportHandleLineEnd.attr('x1', toPixelX(supportCurve.p3)).attr('y1', toPixelYSupport(supportCurve.p3)).attr('x2', toPixelX(supportCurve.cp2)).attr('y2', toPixelYSupport(supportCurve.cp2));
+    supportP0.attr('cx', toPixelX(supportCurve.p0)).attr('cy', toPixelYSupport(supportCurve.p0));
+    supportP3.attr('cx', toPixelX(supportCurve.p3)).attr('cy', toPixelYSupport(supportCurve.p3));
+    supportCP1.attr('cx', toPixelX(supportCurve.cp1)).attr('cy', toPixelYSupport(supportCurve.cp1));
+    supportCP2.attr('cx', toPixelX(supportCurve.cp2)).attr('cy', toPixelYSupport(supportCurve.cp2));
 
     // Recovery bezier
-    recoveryPath.attr('d', `M ${toPixelX(recCurve.p0)},${toPixelYRecovery(recCurve.p0)} C ${toPixelX(recCurve.cp1)},${toPixelYRecovery(recCurve.cp1)} ${toPixelX(recCurve.cp2)},${toPixelYRecovery(recCurve.cp2)} ${toPixelX(recCurve.p3)},${toPixelYRecovery(recCurve.p3)}`);
-    recoveryHandleLineStart.attr('x1', toPixelX(recCurve.p0)).attr('y1', toPixelYRecovery(recCurve.p0)).attr('x2', toPixelX(recCurve.cp1)).attr('y2', toPixelYRecovery(recCurve.cp1));
-    recoveryHandleLineEnd.attr('x1', toPixelX(recCurve.p3)).attr('y1', toPixelYRecovery(recCurve.p3)).attr('x2', toPixelX(recCurve.cp2)).attr('y2', toPixelYRecovery(recCurve.cp2));
-    recoveryP0.attr('cx', toPixelX(recCurve.p0)).attr('cy', toPixelYRecovery(recCurve.p0));
-    recoveryP3.attr('cx', toPixelX(recCurve.p3)).attr('cy', toPixelYRecovery(recCurve.p3));
-    recoveryCP1.attr('cx', toPixelX(recCurve.cp1)).attr('cy', toPixelYRecovery(recCurve.cp1));
-    recoveryCP2.attr('cx', toPixelX(recCurve.cp2)).attr('cy', toPixelYRecovery(recCurve.cp2));
+    recoveryPath.attr('d', `M ${toPixelX(recoveryCurve.p0)},${toPixelYRecovery(recoveryCurve.p0)} C ${toPixelX(recoveryCurve.cp1)},${toPixelYRecovery(recoveryCurve.cp1)} ${toPixelX(recoveryCurve.cp2)},${toPixelYRecovery(recoveryCurve.cp2)} ${toPixelX(recoveryCurve.p3)},${toPixelYRecovery(recoveryCurve.p3)}`);
+    recoveryHandleLineStart.attr('x1', toPixelX(recoveryCurve.p0)).attr('y1', toPixelYRecovery(recoveryCurve.p0)).attr('x2', toPixelX(recoveryCurve.cp1)).attr('y2', toPixelYRecovery(recoveryCurve.cp1));
+    recoveryHandleLineEnd.attr('x1', toPixelX(recoveryCurve.p3)).attr('y1', toPixelYRecovery(recoveryCurve.p3)).attr('x2', toPixelX(recoveryCurve.cp2)).attr('y2', toPixelYRecovery(recoveryCurve.cp2));
+    recoveryP0.attr('cx', toPixelX(recoveryCurve.p0)).attr('cy', toPixelYRecovery(recoveryCurve.p0));
+    recoveryP3.attr('cx', toPixelX(recoveryCurve.p3)).attr('cy', toPixelYRecovery(recoveryCurve.p3));
+    recoveryCP1.attr('cx', toPixelX(recoveryCurve.cp1)).attr('cy', toPixelYRecovery(recoveryCurve.cp1));
+    recoveryCP2.attr('cx', toPixelX(recoveryCurve.cp2)).attr('cy', toPixelYRecovery(recoveryCurve.cp2));
 
     // Total = support + recovery sampled as polyline
-    const supVals = sampleBezier(supCurve, currentConfig.supportMaxOutput, TOTAL_SAMPLES);
-    const recVals = sampleBezier(recCurve, currentConfig.recoveryMaxOutput, TOTAL_SAMPLES);
+    const supVals = sampleBezier(supportCurve, currentConfig.supportMaxOutput, TOTAL_SAMPLES);
+    const recVals = sampleBezier(recoveryCurve, currentConfig.recoveryMaxOutput, TOTAL_SAMPLES);
     const totalPoints: [number, number][] = [];
     for (let i = 0; i <= TOTAL_SAMPLES; i++) {
       const nx = i / TOTAL_SAMPLES;
@@ -216,7 +212,11 @@ export function createConfigScreen(
   }
 
   function emitChange(): void {
-    callbacks.onChange(currentConfig);
+    callbacks.onChange({
+      ...currentConfig,
+      supportCurve: deepCopyCurve(currentConfig.supportCurve),
+      recoveryCurve: deepCopyCurve(currentConfig.recoveryCurve),
+    });
   }
 
   // --- Drag behaviors ---
@@ -235,8 +235,10 @@ export function createConfigScreen(
     yAxisG.call(d3.axisLeft(yScale).ticks(6));
   }
 
-  // Rescale a curve's normalized points when the max output grows, preserving
-  // real-world positions. Then update the shared Y axis to reflect the new range.
+  // maxOutput only grows (never shrinks) during a drag session. This means the
+  // Y-axis resolution can degrade if a user briefly drags high then back down.
+  // This is intentional: shrinking would cause all normalized points to jump,
+  // which feels jarring during drag. The Reset button restores original resolution.
   function rescaleCurve(curve: BezierCurve, key: 'supportMaxOutput' | 'recoveryMaxOutput', newMax: number): void {
     const ratio = currentConfig[key] / newMax;
     curve.p0.y *= ratio;
@@ -256,68 +258,56 @@ export function createConfigScreen(
     point.y = realY / currentConfig[key];
   }
 
-  // Support endpoints (x pinned, y draggable; attached handle moves with it)
-  supportP0.call(d3.drag<SVGCircleElement, unknown>().on('drag', (event) => {
-    const realY = toRealY(event.y);
-    const oldRealY = currentConfig.supportCurve.p0.y * currentConfig.supportMaxOutput;
-    const newHandleRealY = currentConfig.supportCurve.cp1.y * currentConfig.supportMaxOutput + (realY - oldRealY);
-    setCurveY(currentConfig.supportCurve.p0, realY, currentConfig.supportCurve, 'supportMaxOutput');
-    setCurveY(currentConfig.supportCurve.cp1, Math.max(0, newHandleRealY), currentConfig.supportCurve, 'supportMaxOutput');
-    render(); emitChange();
-  }));
-  supportP3.call(d3.drag<SVGCircleElement, unknown>().on('drag', (event) => {
-    const realY = toRealY(event.y);
-    const oldRealY = currentConfig.supportCurve.p3.y * currentConfig.supportMaxOutput;
-    const newHandleRealY = currentConfig.supportCurve.cp2.y * currentConfig.supportMaxOutput + (realY - oldRealY);
-    setCurveY(currentConfig.supportCurve.p3, realY, currentConfig.supportCurve, 'supportMaxOutput');
-    setCurveY(currentConfig.supportCurve.cp2, Math.max(0, newHandleRealY), currentConfig.supportCurve, 'supportMaxOutput');
-    render(); emitChange();
-  }));
-  supportCP1.call(d3.drag<SVGCircleElement, unknown>().on('drag', (event) => {
-    currentConfig.supportCurve.cp1.x = clamp(xScale.invert(event.x), 0, 1);
-    setCurveY(currentConfig.supportCurve.cp1, toRealY(event.y), currentConfig.supportCurve, 'supportMaxOutput');
-    render(); emitChange();
-  }));
-  supportCP2.call(d3.drag<SVGCircleElement, unknown>().on('drag', (event) => {
-    currentConfig.supportCurve.cp2.x = clamp(xScale.invert(event.x), 0, 1);
-    setCurveY(currentConfig.supportCurve.cp2, toRealY(event.y), currentConfig.supportCurve, 'supportMaxOutput');
-    render(); emitChange();
-  }));
+  // --- Drag handler factories ---
+  // Two patterns: endpoints (Y-only, attached control handle follows) and
+  // control handles (free X+Y movement).
 
-  // Recovery endpoints (attached handle moves with it)
-  recoveryP0.call(d3.drag<SVGCircleElement, unknown>().on('drag', (event) => {
-    const realY = toRealY(event.y);
-    const oldRealY = currentConfig.recoveryCurve.p0.y * currentConfig.recoveryMaxOutput;
-    const newHandleRealY = currentConfig.recoveryCurve.cp1.y * currentConfig.recoveryMaxOutput + (realY - oldRealY);
-    setCurveY(currentConfig.recoveryCurve.p0, realY, currentConfig.recoveryCurve, 'recoveryMaxOutput');
-    setCurveY(currentConfig.recoveryCurve.cp1, Math.max(0, newHandleRealY), currentConfig.recoveryCurve, 'recoveryMaxOutput');
-    render(); emitChange();
-  }));
-  recoveryP3.call(d3.drag<SVGCircleElement, unknown>().on('drag', (event) => {
-    const realY = toRealY(event.y);
-    const oldRealY = currentConfig.recoveryCurve.p3.y * currentConfig.recoveryMaxOutput;
-    const newHandleRealY = currentConfig.recoveryCurve.cp2.y * currentConfig.recoveryMaxOutput + (realY - oldRealY);
-    setCurveY(currentConfig.recoveryCurve.p3, realY, currentConfig.recoveryCurve, 'recoveryMaxOutput');
-    setCurveY(currentConfig.recoveryCurve.cp2, Math.max(0, newHandleRealY), currentConfig.recoveryCurve, 'recoveryMaxOutput');
-    render(); emitChange();
-  }));
-  recoveryCP1.call(d3.drag<SVGCircleElement, unknown>().on('drag', (event) => {
-    currentConfig.recoveryCurve.cp1.x = clamp(xScale.invert(event.x), 0, 1);
-    setCurveY(currentConfig.recoveryCurve.cp1, toRealY(event.y), currentConfig.recoveryCurve, 'recoveryMaxOutput');
-    render(); emitChange();
-  }));
-  recoveryCP2.call(d3.drag<SVGCircleElement, unknown>().on('drag', (event) => {
-    currentConfig.recoveryCurve.cp2.x = clamp(xScale.invert(event.x), 0, 1);
-    setCurveY(currentConfig.recoveryCurve.cp2, toRealY(event.y), currentConfig.recoveryCurve, 'recoveryMaxOutput');
-    render(); emitChange();
-  }));
+  function makeEndpointDrag(
+    endpoint: Point,
+    attachedHandle: Point,
+    curve: BezierCurve,
+    maxKey: 'supportMaxOutput' | 'recoveryMaxOutput',
+  ): d3.DragBehavior<SVGCircleElement, unknown, unknown> {
+    return d3.drag<SVGCircleElement, unknown>().on('drag', (event) => {
+      const realY = toRealY(event.y);
+      const oldRealY = endpoint.y * currentConfig[maxKey];
+      const newHandleRealY = attachedHandle.y * currentConfig[maxKey] + (realY - oldRealY);
+      setCurveY(endpoint, realY, curve, maxKey);
+      setCurveY(attachedHandle, Math.max(0, newHandleRealY), curve, maxKey);
+      render(); emitChange();
+    });
+  }
+
+  function makeControlHandleDrag(
+    handle: Point,
+    curve: BezierCurve,
+    maxKey: 'supportMaxOutput' | 'recoveryMaxOutput',
+  ): d3.DragBehavior<SVGCircleElement, unknown, unknown> {
+    return d3.drag<SVGCircleElement, unknown>().on('drag', (event) => {
+      handle.x = clamp(xScale.invert(event.x), 0, 1);
+      setCurveY(handle, toRealY(event.y), curve, maxKey);
+      render(); emitChange();
+    });
+  }
+
+  // Support curve drag handlers
+  supportP0.call(makeEndpointDrag(currentConfig.supportCurve.p0, currentConfig.supportCurve.cp1, currentConfig.supportCurve, 'supportMaxOutput'));
+  supportP3.call(makeEndpointDrag(currentConfig.supportCurve.p3, currentConfig.supportCurve.cp2, currentConfig.supportCurve, 'supportMaxOutput'));
+  supportCP1.call(makeControlHandleDrag(currentConfig.supportCurve.cp1, currentConfig.supportCurve, 'supportMaxOutput'));
+  supportCP2.call(makeControlHandleDrag(currentConfig.supportCurve.cp2, currentConfig.supportCurve, 'supportMaxOutput'));
+
+  // Recovery curve drag handlers
+  recoveryP0.call(makeEndpointDrag(currentConfig.recoveryCurve.p0, currentConfig.recoveryCurve.cp1, currentConfig.recoveryCurve, 'recoveryMaxOutput'));
+  recoveryP3.call(makeEndpointDrag(currentConfig.recoveryCurve.p3, currentConfig.recoveryCurve.cp2, currentConfig.recoveryCurve, 'recoveryMaxOutput'));
+  recoveryCP1.call(makeControlHandleDrag(currentConfig.recoveryCurve.cp1, currentConfig.recoveryCurve, 'recoveryMaxOutput'));
+  recoveryCP2.call(makeControlHandleDrag(currentConfig.recoveryCurve.cp2, currentConfig.recoveryCurve, 'recoveryMaxOutput'));
 
   render();
 
   // --- Expense inputs ---
-  const fixedExpInput = modal.querySelector<HTMLInputElement>('#fixedExpenses')!;
-  const costBaseInput = modal.querySelector<HTMLInputElement>('#projectCostBase')!;
-  const costPerMonthInput = modal.querySelector<HTMLInputElement>('#projectCostPerMonth')!;
+  const fixedExpInput = modal.querySelector<HTMLInputElement>('[data-field="fixedExpenses"]')!;
+  const costBaseInput = modal.querySelector<HTMLInputElement>('[data-field="projectCostBase"]')!;
+  const costPerMonthInput = modal.querySelector<HTMLInputElement>('[data-field="projectCostPerMonth"]')!;
 
   function emitExpenseChange(): void {
     callbacks.onExpenseChange({
@@ -332,9 +322,9 @@ export function createConfigScreen(
   costPerMonthInput.addEventListener('change', emitExpenseChange);
 
   // --- Modal controls ---
-  modal.querySelector('#configCloseBtn')!.addEventListener('click', callbacks.onClose);
-  modal.querySelector('#configDoneBtn')!.addEventListener('click', callbacks.onClose);
-  modal.querySelector('#configResetBtn')!.addEventListener('click', callbacks.onReset);
+  modal.querySelector('.config-close-btn')!.addEventListener('click', callbacks.onClose);
+  modal.querySelector('.config-done-btn')!.addEventListener('click', callbacks.onClose);
+  modal.querySelector('.config-reset-btn')!.addEventListener('click', callbacks.onReset);
 
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) callbacks.onClose();
