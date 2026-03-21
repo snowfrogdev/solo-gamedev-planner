@@ -36,13 +36,9 @@ export function averageEffectivePrice(
 /** Price = $5.00 × ln(months) − $1.00, snapped to nearest Steam tier */
 export function computeLaunchPrice(devDurationMonths: number): PricingInfo {
   if (devDurationMonths <= 0) {
-    const lp = PRICE_TIERS[0];
     return {
-      launchPrice: lp,
+      launchPrice: PRICE_TIERS[0],
       rawPrice: 0,
-      aepMonth1: averageEffectivePrice(lp, 1),
-      aepYear1: averageEffectivePrice(lp, 12),
-      aepYear3: averageEffectivePrice(lp, 36),
     };
   }
   const rawPrice = 5.00 * Math.log(devDurationMonths) - 1.00;
@@ -59,8 +55,5 @@ export function computeLaunchPrice(devDurationMonths: number): PricingInfo {
   return {
     launchPrice,
     rawPrice,
-    aepMonth1: averageEffectivePrice(launchPrice, 1),
-    aepYear1: averageEffectivePrice(launchPrice, 12),
-    aepYear3: averageEffectivePrice(launchPrice, 36),
   };
 }

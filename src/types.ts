@@ -57,7 +57,17 @@ export interface DowntimeBreakdown {
 export interface PricingInfo {
   launchPrice: number;
   rawPrice: number;
-  aepMonth1: number;
-  aepYear1: number;
-  aepYear3: number;
+}
+
+/** Monthly unit sales time series for a single project */
+export interface SalesTimeSeries {
+  m1Units: number;
+  tailStrength: number;
+  monthlySales: number[];      // index 0 = month 1 (launch month)
+  monthlyPrices: number[];     // AEP per month (same indexing)
+  monthlyRevenue: number[];    // price × units per month
+  cumulativeTotal: number;
+  cumulativeYear1: number;
+  cumulativeYear2: number;
+  cumulativeYear5: number;
 }

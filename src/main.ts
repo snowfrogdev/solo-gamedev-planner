@@ -8,7 +8,8 @@ import { getDefaultSupportCurve, getDefaultRecoveryCurve, getDefaultSupportMax, 
 import { generatePlan } from './engine/projectGenerator';
 import { defaultDowntime, createCustomDowntime } from './engine/downtimeCalculator';
 import { computeLaunchPrice } from './engine/pricingModel';
-import type { DowntimeBreakdown, PricingInfo } from './types';
+import { computeSalesTimeSeries } from './engine/salesModel';
+import type { DowntimeBreakdown, PricingInfo, SalesTimeSeries } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -78,12 +79,14 @@ const sidePanel = createSidePanel(panelRoot);
 // Pre-computed per-project data (rebuilt on regenerate)
 let breakdowns = new Map<number, DowntimeBreakdown>();
 let pricingMap = new Map<number, PricingInfo>();
+let salesMap = new Map<number, SalesTimeSeries>();
 
 // Timeline
 const timeline = createTimeline(timelineContainer, (project) => {
   const breakdown = breakdowns.get(project.index);
   const pricing = pricingMap.get(project.index);
-  if (breakdown && pricing) sidePanel.show(project, breakdown, pricing);
+  const sales = salesMap.get(project.index);
+  if (breakdown && pricing) sidePanel.show(project, breakdown, pricing, sales);
 });
 
 // React to state changes
@@ -99,6 +102,18 @@ function regenerate(): void {
   );
   pricingMap = new Map(
     plan.projects.map((p) => [p.index, computeLaunchPrice(p.devDurationMonths)]),
+  );
+
+  // TODO: derive from project scope; 500 units is a stand-in until user-configurable sales inputs exist
+  const PLACEHOLDER_LAUNCH_UNITS = 500;
+  salesMap = new Map(
+    plan.projects.map((p) => {
+      const pricing = pricingMap.get(p.index)!;
+      return [
+        p.index,
+        computeSalesTimeSeries(p.endMonth, state.inputs.timeHorizonMonths, PLACEHOLDER_LAUNCH_UNITS, pricing.launchPrice),
+      ];
+    }),
   );
 
   timeline.update(plan, state.inputs);

@@ -458,7 +458,7 @@ input[type="range"]:disabled::-webkit-slider-thumb {
 }
 
 .side-panel {
-  width: 340px;
+  width: 480px;
   max-width: 100%;
   height: 100%;
   background: var(--surface);
@@ -531,6 +531,24 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   font-style: italic;
   color: var(--text);
   margin: 0;
+}
+
+.revenue-chart-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-tooltip {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
 }
 
 @media (max-width: 768px) {

@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { GlobalWindow } from 'happy-dom';
 import { createSidePanel } from './sidePanel';
-import type { PlannedProject, DowntimeBreakdown, PricingInfo } from '../types';
+import type { PlannedProject, DowntimeBreakdown, PricingInfo, SalesTimeSeries } from '../types';
+import { computeSalesTimeSeries } from '../engine/salesModel';
 
 const project: PlannedProject = {
   index: 2,
@@ -21,10 +22,9 @@ const breakdown: DowntimeBreakdown = {
 const pricing: PricingInfo = {
   launchPrice: 4.99,
   rawPrice: 3.20,
-  aepMonth1: 3.67,
-  aepYear1: 2.63,
-  aepYear3: 1.22,
 };
+
+const sales: SalesTimeSeries = computeSalesTimeSeries(8, 120, 500, 4.99);
 
 let window: InstanceType<typeof GlobalWindow>;
 let container: HTMLElement;
@@ -157,5 +157,42 @@ describe('createSidePanel', () => {
 
     panel.destroy();
     expect(container.querySelector('.side-panel-overlay')).toBeNull();
+  });
+
+  test('show() renders revenue chart section when sales data provided', () => {
+    const panel = createSidePanel(container);
+    panel.show(project, breakdown, pricing, sales);
+
+    const headings = Array.from(container.querySelectorAll('h3'))
+      .map((el) => el.textContent!.trim());
+    expect(headings).toContain('Revenue Over Time');
+
+    panel.destroy();
+  });
+
+  test('show() renders revenue chart SVG when sales data provided', () => {
+    const panel = createSidePanel(container);
+    panel.show(project, breakdown, pricing, sales);
+
+    const svg = container.querySelector('.revenue-chart');
+    expect(svg).not.toBeNull();
+
+    // 3 data lines: units, revenue, price
+    const lines = container.querySelectorAll('.line-units, .line-revenue, .line-price');
+    expect(lines.length).toBe(3);
+
+    panel.destroy();
+  });
+
+  test('show() omits revenue section when no sales data', () => {
+    const panel = createSidePanel(container);
+    panel.show(project, breakdown, pricing);
+
+    const headings = Array.from(container.querySelectorAll('h3'))
+      .map((el) => el.textContent!.trim());
+    expect(headings).not.toContain('Revenue Over Time');
+    expect(container.querySelector('.revenue-chart')).toBeNull();
+
+    panel.destroy();
   });
 });

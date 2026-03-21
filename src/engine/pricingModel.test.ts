@@ -49,15 +49,6 @@ describe('computeLaunchPrice', () => {
     expect(result.launchPrice).toBe(7.99);
   });
 
-  test('includes pre-computed AEP values', () => {
-    const result = computeLaunchPrice(6);
-    expect(result.aepMonth1).toBeCloseTo(
-      result.launchPrice * 0.80 * 0.9188, 1,
-    );
-    expect(result.aepYear1).toBeLessThan(result.aepMonth1);
-    expect(result.aepYear3).toBeLessThan(result.aepYear1);
-    expect(result.aepYear3).toBeGreaterThan(0);
-  });
 });
 
 describe('averageEffectivePrice', () => {
