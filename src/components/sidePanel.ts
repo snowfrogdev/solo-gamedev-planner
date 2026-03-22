@@ -13,8 +13,12 @@ function fmtMonths(n: number): string {
   return n.toFixed(1);
 }
 
+function fmtInt(n: number): string {
+  return String(Math.round(n));
+}
+
 function fmtUsd(n: number): string {
-  return `$${n.toFixed(2)}`;
+  return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // --- Chart constants ---
@@ -223,7 +227,7 @@ function renderRevenueChart(
     revenue: sales.monthlyRevenue[i],
   }));
 
-  const width = chartContainer.clientWidth || 440;
+  const width = chartContainer.clientWidth || 740;
   const innerW = width - CHART_MARGIN.left - CHART_MARGIN.right;
   const innerH = CHART_HEIGHT - CHART_MARGIN.top - CHART_MARGIN.bottom;
 
@@ -288,88 +292,97 @@ export function createSidePanel(
         <button class="close-btn" aria-label="Close">&times;</button>
       </div>
 
-      <div class="side-panel-section">
-        <h3>Scope</h3>
-        <div class="side-panel-row">
-          <span>Dev Duration</span>
-          <span class="side-panel-value">${fmtMonths(project.devDurationMonths)} mo</span>
+      <div class="side-panel-columns">
+        <div class="side-panel-section">
+          <h3>Scope</h3>
+          <div class="side-panel-row">
+            <span>Dev Duration</span>
+            <span class="side-panel-value">${fmtInt(project.devDurationMonths)} mo</span>
+          </div>
+          <div class="side-panel-row">
+            <span>Start</span>
+            <span class="side-panel-value">Month ${fmtInt(project.startMonth)}</span>
+          </div>
+          <div class="side-panel-row">
+            <span>End</span>
+            <span class="side-panel-value">Month ${fmtInt(project.endMonth)}</span>
+          </div>
         </div>
-        <div class="side-panel-row">
-          <span>Start</span>
-          <span class="side-panel-value">Month ${fmtMonths(project.startMonth)}</span>
+
+        <div class="side-panel-section">
+          <h3>Downtime</h3>
+          <div class="side-panel-row">
+            <span>Total</span>
+            <span class="side-panel-value">${fmtInt(breakdown.total)} mo</span>
+          </div>
+          <div class="side-panel-row sub">
+            <span>Post-Launch Support</span>
+            <span class="side-panel-value">${fmtMonths(breakdown.postLaunchSupport)} mo</span>
+          </div>
+          <div class="side-panel-row sub">
+            <span>Creative Recovery</span>
+            <span class="side-panel-value">${fmtMonths(breakdown.creativeRecovery)} mo</span>
+          </div>
         </div>
-        <div class="side-panel-row">
-          <span>End</span>
-          <span class="side-panel-value">Month ${fmtMonths(project.endMonth)}</span>
+
+        <div class="side-panel-section">
+          <h3>Cycle</h3>
+          <div class="side-panel-row">
+            <span>Total Cycle</span>
+            <span class="side-panel-value">${fmtInt(cycleDuration)} mo</span>
+          </div>
+          <div class="side-panel-row">
+            <span>Cycle End</span>
+            <span class="side-panel-value">Month ${fmtInt(project.cycleEndMonth)}</span>
+          </div>
         </div>
       </div>
 
-      <div class="side-panel-section">
-        <h3>Downtime</h3>
-        <div class="side-panel-row">
-          <span>Total</span>
-          <span class="side-panel-value">${fmtMonths(breakdown.total)} mo</span>
+      ${sales ? (() => {
+        const totalRevenue = sales.monthlyRevenue.reduce((a, b) => a + b, 0);
+        const cutRate = platformCutRate ?? DEFAULT_PLATFORM_CUT_RATE;
+        const fin = computeProjectFinancials(totalRevenue, sales.totalDevCost, cutRate);
+        return `
+      <div class="side-panel-columns-2">
+        <div class="side-panel-section">
+          <h3>Pricing & Sales</h3>
+          <div class="side-panel-row">
+            <span>Launch Price</span>
+            <span class="side-panel-value">${fmtUsd(pricing.launchPrice)}</span>
+          </div>
+          <div class="side-panel-row">
+            <span>Month 1 Units</span>
+            <span class="side-panel-value">${Math.round(sales.m1Units).toLocaleString()}</span>
+          </div>
         </div>
-        <div class="side-panel-row sub">
-          <span>Post-Launch Support</span>
-          <span class="side-panel-value">${fmtMonths(breakdown.postLaunchSupport)} mo</span>
+        <div class="side-panel-section">
+          <h3>Financials</h3>
+          <div class="side-panel-row">
+            <span>Total Revenue</span>
+            <span class="side-panel-value">${fmtUsd(fin.totalRevenue)}</span>
+          </div>
+          <div class="side-panel-row sub">
+            <span>Platform Fees (${Math.round(cutRate * 100)}%)</span>
+            <span class="side-panel-value">-${fmtUsd(fin.platformFees)}</span>
+          </div>
+          <div class="side-panel-row sub">
+            <span>Dev Cost</span>
+            <span class="side-panel-value">-${fmtUsd(fin.totalDevCost)}</span>
+          </div>
+          <div class="side-panel-row">
+            <span>Gross Profit</span>
+            <span class="side-panel-value">${fmtUsd(fin.grossProfit)}</span>
+          </div>
         </div>
-        <div class="side-panel-row sub">
-          <span>Creative Recovery</span>
-          <span class="side-panel-value">${fmtMonths(breakdown.creativeRecovery)} mo</span>
-        </div>
-      </div>
-
-      <div class="side-panel-section">
-        <h3>Cycle</h3>
-        <div class="side-panel-row">
-          <span>Total Cycle</span>
-          <span class="side-panel-value">${fmtMonths(cycleDuration)} mo</span>
-        </div>
-        <div class="side-panel-row">
-          <span>Cycle End</span>
-          <span class="side-panel-value">Month ${fmtMonths(project.cycleEndMonth)}</span>
-        </div>
-      </div>
-
+      </div>`;
+      })() : `
       <div class="side-panel-section">
         <h3>Pricing & Sales</h3>
         <div class="side-panel-row">
           <span>Launch Price</span>
           <span class="side-panel-value">${fmtUsd(pricing.launchPrice)}</span>
         </div>
-        ${sales ? `
-        <div class="side-panel-row">
-          <span>Month 1 Units</span>
-          <span class="side-panel-value">${Math.round(sales.m1Units).toLocaleString()}</span>
-        </div>
-        ` : ''}
-      </div>
-      ${sales ? (() => {
-        const totalRevenue = sales.monthlyRevenue.reduce((a, b) => a + b, 0);
-        const cutRate = platformCutRate ?? DEFAULT_PLATFORM_CUT_RATE;
-        const fin = computeProjectFinancials(totalRevenue, sales.totalDevCost, cutRate);
-        return `
-      <div class="side-panel-section">
-        <h3>Financials</h3>
-        <div class="side-panel-row">
-          <span>Total Revenue</span>
-          <span class="side-panel-value">${fmtUsd(fin.totalRevenue)}</span>
-        </div>
-        <div class="side-panel-row sub">
-          <span>Platform Fees (${Math.round(cutRate * 100)}%)</span>
-          <span class="side-panel-value">-${fmtUsd(fin.platformFees)}</span>
-        </div>
-        <div class="side-panel-row sub">
-          <span>Dev Cost</span>
-          <span class="side-panel-value">-${fmtUsd(fin.totalDevCost)}</span>
-        </div>
-        <div class="side-panel-row">
-          <span>Gross Profit</span>
-          <span class="side-panel-value">${fmtUsd(fin.grossProfit)}</span>
-        </div>
-      </div>`;
-      })() : ''}
+      </div>`}
       ${showChart ? `
       <div class="side-panel-section">
         <h3>Revenue Over Time</h3>
@@ -387,6 +400,9 @@ export function createSidePanel(
     `;
 
     panel.querySelector('.close-btn')!.addEventListener('click', hide);
+
+    // Make overlay visible before rendering chart so clientWidth is available
+    overlay.classList.add('visible');
 
     if (showChart) {
       const chartContainer = panel.querySelector<HTMLElement>('.revenue-chart-container');
@@ -414,8 +430,6 @@ export function createSidePanel(
         });
       }
     }
-
-    overlay.classList.add('visible');
   }
 
   function renderComparisonReport(

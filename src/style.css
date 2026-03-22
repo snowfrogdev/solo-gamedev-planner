@@ -527,7 +527,7 @@ input[type="range"]:disabled::-webkit-slider-thumb {
 }
 
 .side-panel {
-  width: 480px;
+  width: 740px;
   max-width: 100%;
   height: 100%;
   background: var(--surface);
@@ -558,6 +558,25 @@ input[type="range"]:disabled::-webkit-slider-thumb {
 
 .side-panel-section {
   margin-bottom: 1.25rem;
+}
+
+.side-panel-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 1.75rem;
+}
+
+.side-panel-columns-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 1.75rem;
+}
+
+.side-panel-columns .side-panel-section,
+.side-panel-columns-2 .side-panel-section {
+  margin-bottom: 0;
 }
 
 .side-panel-section h3 {
@@ -605,6 +624,10 @@ input[type="range"]:disabled::-webkit-slider-thumb {
 .revenue-chart-container {
   position: relative;
   overflow: hidden;
+  margin-left: -1.5rem;
+  margin-right: -1.5rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
 }
 
 .chart-tooltip {
@@ -742,5 +765,9 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   }
   .side-panel {
     width: 100%;
+  }
+  .side-panel-columns,
+  .side-panel-columns-2 {
+    grid-template-columns: 1fr;
   }
 }

@@ -8,15 +8,16 @@ const project: PlannedProject = {
   index: 2,
   startMonth: 5,
   devDurationMonths: 3,
+  rawDevDuration: 3,
   endMonth: 8,
-  downtimeMonths: 1.5,
-  cycleEndMonth: 9.5,
+  downtimeMonths: 2,
+  cycleEndMonth: 10,
 };
 
 const breakdown: DowntimeBreakdown = {
-  total: 1.5,
-  postLaunchSupport: 1.0,
-  creativeRecovery: 0.5,
+  total: 2,
+  postLaunchSupport: 1.3,
+  creativeRecovery: 0.7,
 };
 
 const pricing: PricingInfo = {
@@ -53,14 +54,14 @@ describe('createSidePanel', () => {
     const values = Array.from(overlay.querySelectorAll('.side-panel-value'))
       .map((el) => el.textContent!.trim());
 
-    expect(values).toContain('3.0 mo');     // Dev Duration
-    expect(values).toContain('Month 5.0');  // Start
-    expect(values).toContain('Month 8.0');  // End
-    expect(values).toContain('1.5 mo');     // Total downtime
-    expect(values).toContain('1.0 mo');     // Post-Launch Support
-    expect(values).toContain('0.5 mo');     // Creative Recovery
-    expect(values).toContain('4.5 mo');     // Total Cycle (3 + 1.5)
-    expect(values).toContain('Month 9.5');  // Cycle End
+    expect(values).toContain('3 mo');        // Dev Duration
+    expect(values).toContain('Month 5');     // Start
+    expect(values).toContain('Month 8');     // End
+    expect(values).toContain('2 mo');        // Total downtime (rounded)
+    expect(values).toContain('1.3 mo');      // Post-Launch Support
+    expect(values).toContain('0.7 mo');      // Creative Recovery
+    expect(values).toContain('5 mo');        // Total Cycle (3 + 2)
+    expect(values).toContain('Month 10');    // Cycle End
 
     panel.destroy();
   });
