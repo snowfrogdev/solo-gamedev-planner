@@ -26,15 +26,22 @@ engine/            Business logic (no DOM)
   downtimeCalculator.ts Default power-law formulas + custom bezier-based downtime
   curveInterpolator.ts  Cubic bezier evaluation via 200-sample lookup table
   downtimeDefaults.ts   Least-squares bezier fitting to default formulas
+  steamComparison.ts    Steam market comparison: review-to-sales estimation, percentile ranking
+api/               External data fetching (browser APIs: fetch, IndexedDB)
+  proxyFetch.ts        CORS proxy with failover across multiple services
+  rateLimiter.ts       Rate-limited fetch with exponential backoff for 429s
+  steamCache.ts        IndexedDB persistence for Steam game data
+  steamSearch.ts       Background paginated fetcher for Steam indie games
 state.ts           Pub-sub store (subscribe/notify/updateState)
 components/        Factory functions returning {update, show, hide, destroy} interfaces
   inputPanel.ts    Slider controls with cross-linked constraints
   timeline.ts      D3 bar chart visualization
   configScreen.ts  Modal with interactive dual-curve bezier editor
+  sidePanel.ts     Project detail overlay with Steam market comparison
 main.ts            Wires state → components, subscribe(regenerate) loop
 ```
 
-Dependencies flow downward: `main → components → engine → types`. State imports only from `engine` and `types`.
+Dependencies flow downward: `main → components → engine → types`, `main → api → engine → types`. State imports only from `engine` and `types`. Components do not import from `api/` — data-fetching is injected via callbacks from `main.ts`.
 
 ### Key patterns
 
