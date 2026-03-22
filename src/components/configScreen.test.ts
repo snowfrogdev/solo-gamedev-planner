@@ -73,6 +73,7 @@ const defaultExpenses: ExpenseInputs = {
   monthlyFixedExpenses: 300,
   projectCostBase: 500,
   projectCostPerMonth: 250,
+  platformCutRate: 0.30,
 };
 
 let window: InstanceType<typeof GlobalWindow>;

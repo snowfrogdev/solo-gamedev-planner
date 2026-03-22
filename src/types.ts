@@ -21,6 +21,7 @@ export interface PlannerInputs {
   monthlyFixedExpenses: number;
   projectCostBase: number;
   projectCostPerMonth: number;
+  platformCutRate: number;
 }
 
 /** A single generated project in the timeline */
@@ -73,15 +74,19 @@ export interface SalesTimeSeries {
   cumulativeYear1: number;
   cumulativeYear2: number;
   cumulativeYear5: number;
-  monthlyExpenses: number[];     // variable project costs distributed across dev months
-  totalExpenses: number;         // sum of monthlyExpenses
+  monthlyDevCosts: number[];     // variable project costs distributed across dev months
+  totalDevCost: number;          // sum of monthlyDevCosts
 }
 
 /** A single month's accounting entry (horizon-wide aggregation) */
 export interface MonthlyAccountingEntry {
   revenue: number;
-  expenses: number;
-  netIncome: number;
+  cogs: number;              // platformFees + projectDevCosts
+  grossProfit: number;       // revenue - cogs
+  fixedExpenses: number;     // monthly overhead
+  netProfit: number;         // grossProfit - fixedExpenses
+  platformFees: number;      // revenue * platformCutRate
+  projectDevCosts: number;   // variable project costs for this month
 }
 
 /** Monthly accounting time series spanning the planning horizon */

@@ -1,7 +1,7 @@
 import type { PlannerInputs, PlannedProject, PricingInfo } from '../types';
 import { mulberry32 } from './prng';
 import { computeSalesTimeSeries } from './salesModel';
-import { computeAccountingTimeSeries, computeAnnualizedIncome } from './accountingTimeSeries';
+import { computeAccountingTimeSeries, computeAnnualizedNetProfit } from './accountingTimeSeries';
 import { smoothness } from './optimizerUtils';
 
 const MAX_ITERATIONS = 2000;
@@ -13,6 +13,7 @@ function hashM1Inputs(inputs: PlannerInputs, projectCount: number): number {
   hash = (hash * 31 + projectCount) | 0;
   hash = (hash * 31 + Math.round(inputs.timeHorizonMonths * 100)) | 0;
   hash = (hash * 31 + Math.round(inputs.targetDevScope * 100)) | 0;
+  hash = (hash * 31 + Math.round(inputs.platformCutRate * 1000)) | 0;
   return hash;
 }
 
@@ -36,7 +37,7 @@ function evaluateAnnualizedIncome(
   );
 
   const accounting = computeAccountingTimeSeries(projects, salesMap, horizon, inputs);
-  return computeAnnualizedIncome(accounting, horizon, inputs.targetDevScope);
+  return computeAnnualizedNetProfit(accounting, horizon, inputs.targetDevScope);
 }
 
 function m1Fitness(

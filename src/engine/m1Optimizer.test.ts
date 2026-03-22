@@ -14,6 +14,7 @@ const baseInputs: PlannerInputs = {
   monthlyFixedExpenses: 300,
   projectCostBase: 500,
   projectCostPerMonth: 250,
+  platformCutRate: 0.30,
 };
 
 function buildMaps(inputs: PlannerInputs) {
@@ -85,7 +86,7 @@ describe('optimizeM1Values', () => {
     const windowEnd = Math.min(accounting.entries.length, Math.floor(horizon));
     let totalInWindow = 0;
     for (let m = windowStart; m < windowEnd; m++) {
-      totalInWindow += accounting.entries[m].netIncome;
+      totalInWindow += accounting.entries[m].netProfit;
     }
     const annualized = totalInWindow * 12 / (windowEnd - windowStart);
 

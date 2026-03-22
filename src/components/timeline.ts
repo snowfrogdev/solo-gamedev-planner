@@ -29,7 +29,7 @@ export function findProjectAtMonth(month: number, projects: PlannedProject[]): {
 function renderStats(
   container: HTMLElement,
   plan: GeneratedPlan,
-  annualizedIncome: number,
+  annualizedNetProfit: number,
 ): void {
   const statsEl = document.createElement('div');
   statsEl.className = 'timeline-stats';
@@ -41,7 +41,7 @@ function renderStats(
     <div class="stat"><span class="stat-value">${plan.totalMonths.toFixed(1)}</span><span class="stat-label">Total Months</span></div>
     <div class="stat"><span class="stat-value">${avgDev.toFixed(1)}mo</span><span class="stat-label">Avg Dev Time</span></div>
     <div class="stat"><span class="stat-value">${avgDown.toFixed(1)}mo</span><span class="stat-label">Avg Downtime</span></div>
-    <div class="stat"><span class="stat-value">$${Math.round(annualizedIncome).toLocaleString()}</span><span class="stat-label">Est. Annual Income</span></div>
+    <div class="stat"><span class="stat-value">$${Math.round(annualizedNetProfit).toLocaleString()}</span><span class="stat-label">Est. Annual Net Profit</span></div>
   `;
   container.appendChild(statsEl);
 }
@@ -63,11 +63,13 @@ function drawRevenueArea(
   const monthlyTarget = inputs.targetIncome / 12;
   const maxRevenue = Math.max(
     monthlyTarget * 1.2,
-    d3.max(accounting.entries, (e) => e.netIncome) ?? 0,
+    d3.max(accounting.entries, (e) => e.revenue) ?? 0,
   );
+  const minNetProfit = d3.min(accounting.entries, (e) => e.netProfit) ?? 0;
+  const yMin = Math.min(0, minNetProfit);
 
   const yScale = d3.scaleLinear()
-    .domain([0, maxRevenue])
+    .domain([yMin, maxRevenue])
     .range([revenueAreaBottom, MARGIN.top]);
 
   // Y axis (left)
@@ -107,19 +109,19 @@ function drawRevenueArea(
     .attr('fill-opacity', 0.35)
     .attr('d', areaGen);
 
-  // Net income line (on top of stacked area)
-  const lineData = accounting.entries.map((e, m) => ({ month: m, value: e.netIncome }));
-  const incomeLine = d3.line<(typeof lineData)[0]>()
+  // Net profit line (on top of stacked area)
+  const lineData = accounting.entries.map((e, m) => ({ month: m, value: e.netProfit }));
+  const profitLine = d3.line<(typeof lineData)[0]>()
     .x((d) => xScale(d.month))
     .y((d) => yScale(d.value));
 
   svg.append('path')
     .datum(lineData)
-    .attr('class', 'line-net-income')
+    .attr('class', 'line-net-profit')
     .attr('fill', 'none')
     .attr('stroke', '#70ad47')
     .attr('stroke-width', 1.5)
-    .attr('d', incomeLine);
+    .attr('d', profitLine);
 
   // Income target reference line
   svg.append('line')
@@ -241,12 +243,17 @@ function addTimelineTooltip(
       if (accounting && clampedMonth < accounting.entries.length) {
         const entry = accounting.entries[clampedMonth];
 
-        // Net income
-        html += `<br><span style="color:#70ad47">Net Income:</span> ${fmtCompact(entry.netIncome)}`;
+        // P&L breakdown
+        html += `<br>Revenue: ${fmtCompact(entry.revenue)}`;
+        if (entry.platformFees > 0) html += `<br>Platform Fees: ${fmtCompact(-entry.platformFees)}`;
+        if (entry.projectDevCosts > 0) html += `<br>Dev Costs: ${fmtCompact(-entry.projectDevCosts)}`;
+        html += `<br>Gross Profit: ${fmtCompact(entry.grossProfit)}`;
+        if (entry.fixedExpenses > 0) html += `<br>Fixed Expenses: ${fmtCompact(-entry.fixedExpenses)}`;
+        html += `<br><span style="color:#70ad47">Net Profit:</span> ${fmtCompact(entry.netProfit)}`;
         if (incomeDot && yScale) {
           incomeDot
             .attr('cx', x)
-            .attr('cy', yScale(entry.netIncome))
+            .attr('cy', yScale(entry.netProfit))
             .style('display', null);
         }
 
@@ -292,9 +299,9 @@ function addTimelineTooltip(
 export function createTimeline(
   container: HTMLElement,
   onProjectClick?: (project: PlannedProject) => void,
-): { update(plan: GeneratedPlan, inputs: PlannerInputs, accounting?: AccountingTimeSeries, annualizedIncome?: number): void } {
+): { update(plan: GeneratedPlan, inputs: PlannerInputs, accounting?: AccountingTimeSeries, annualizedNetProfit?: number): void } {
 
-  function update(plan: GeneratedPlan, inputs: PlannerInputs, accounting?: AccountingTimeSeries, annualizedIncome?: number): void {
+  function update(plan: GeneratedPlan, inputs: PlannerInputs, accounting?: AccountingTimeSeries, annualizedNetProfit?: number): void {
     container.innerHTML = '';
 
     if (plan.projects.length === 0) {
@@ -302,7 +309,7 @@ export function createTimeline(
       return;
     }
 
-    renderStats(container, plan, annualizedIncome ?? 0);
+    renderStats(container, plan, annualizedNetProfit ?? 0);
 
     // Chart wrapper (for tooltip positioning)
     const chartWrapper = document.createElement('div');

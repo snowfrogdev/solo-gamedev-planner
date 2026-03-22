@@ -10,6 +10,7 @@ const baseInputs: PlannerInputs = {
   monthlyFixedExpenses: 300,
   projectCostBase: 500,
   projectCostPerMonth: 250,
+  platformCutRate: 0.30,
 };
 
 describe('generatePlan', () => {

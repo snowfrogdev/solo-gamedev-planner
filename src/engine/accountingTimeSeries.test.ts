@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { computeAccountingTimeSeries, computeAnnualizedIncome } from './accountingTimeSeries';
+import { computeAccountingTimeSeries, computeAnnualizedNetProfit } from './accountingTimeSeries';
 import { computeSalesTimeSeries } from './salesModel';
 import type { PlannedProject, PlannerInputs, SalesTimeSeries } from '../types';
 
@@ -11,6 +11,7 @@ const testInputs: PlannerInputs = {
   monthlyFixedExpenses: 0,
   projectCostBase: 0,
   projectCostPerMonth: 0,
+  platformCutRate: 0,
 };
 
 function makeProject(index: number, endMonth: number, devDuration: number): PlannedProject {
@@ -62,11 +63,11 @@ describe('computeAccountingTimeSeries', () => {
     expect(accounting.entries.length).toBe(25);
     for (const entry of accounting.entries) {
       expect(entry.revenue).toBe(0);
-      expect(entry.netIncome).toBe(0);
+      expect(entry.netProfit).toBe(0);
     }
   });
 
-  test('netIncome equals revenue when expenses are zero', () => {
+  test('netProfit equals revenue when all costs are zero', () => {
     const project = makeProject(0, 3, 3);
     const sales = computeSalesTimeSeries(3, 24, 500, 9.99);
     const salesMap = new Map<number, SalesTimeSeries>([[0, sales]]);
@@ -74,8 +75,9 @@ describe('computeAccountingTimeSeries', () => {
     const accounting = computeAccountingTimeSeries([project], salesMap, 24, testInputs);
 
     for (const entry of accounting.entries) {
-      expect(entry.netIncome).toBe(entry.revenue);
-      expect(entry.expenses).toBe(0);
+      expect(entry.netProfit).toBe(entry.revenue);
+      expect(entry.cogs).toBe(0);
+      expect(entry.fixedExpenses).toBe(0);
     }
   });
 
@@ -109,7 +111,7 @@ describe('computeAccountingTimeSeries', () => {
     const salesMap = new Map<number, SalesTimeSeries>([[0, sales]]);
 
     const accounting = computeAccountingTimeSeries([project], salesMap, 24, testInputs);
-    const annualized = computeAnnualizedIncome(accounting, 24, 12);
+    const annualized = computeAnnualizedNetProfit(accounting, 24, 12);
 
     // Should be positive (there's revenue in the lookback window)
     expect(annualized).toBeGreaterThan(0);
@@ -117,7 +119,7 @@ describe('computeAccountingTimeSeries', () => {
     // Window is 12 months (max(12, targetDevScope=12)), so it's the raw sum × 12/12 = raw sum
     let manualSum = 0;
     for (let m = 12; m < 24; m++) {
-      manualSum += accounting.entries[m].netIncome;
+      manualSum += accounting.entries[m].netProfit;
     }
     expect(annualized).toBeCloseTo(manualSum, 2);
   });
@@ -139,8 +141,8 @@ describe('computeAccountingTimeSeries', () => {
     const accounting = computeAccountingTimeSeries([], new Map(), 24, inputs);
 
     for (const entry of accounting.entries) {
-      expect(entry.expenses).toBe(300);
-      expect(entry.netIncome).toBe(-300);
+      expect(entry.fixedExpenses).toBe(300);
+      expect(entry.netProfit).toBe(-300);
     }
   });
 
@@ -156,7 +158,7 @@ describe('computeAccountingTimeSeries', () => {
     // Distributed across dev months 3, 4, 5 (startMonth=3, endMonth=6, 3 months of dev)
     let totalVarExpenses = 0;
     for (let m = 3; m < 6; m++) {
-      totalVarExpenses += accounting.entries[m].expenses;
+      totalVarExpenses += accounting.entries[m].projectDevCosts;
     }
     expect(totalVarExpenses).toBeCloseTo(1250, 0);
   });
@@ -170,19 +172,30 @@ describe('computeAccountingTimeSeries', () => {
     const accounting = computeAccountingTimeSeries([project], salesMap, 60, inputs);
 
     // Month 5 (last dev month) should have higher expenses than month 3 (first dev month)
-    expect(accounting.entries[5].expenses).toBeGreaterThan(accounting.entries[3].expenses);
+    expect(accounting.entries[5].projectDevCosts).toBeGreaterThan(accounting.entries[3].projectDevCosts);
   });
 
-  test('netIncome reflects both revenue and expenses', () => {
+  test('netProfit reflects full P&L breakdown', () => {
     const project = makeProject(0, 3, 3);
     const sales = computeSalesTimeSeries(3, 24, 500, 9.99);
     const salesMap = new Map<number, SalesTimeSeries>([[0, sales]]);
-    const inputs = { ...testInputs, monthlyFixedExpenses: 100, projectCostBase: 300, projectCostPerMonth: 100 };
+    const inputs = { ...testInputs, monthlyFixedExpenses: 100, projectCostBase: 300, projectCostPerMonth: 100, platformCutRate: 0.30 };
 
     const accounting = computeAccountingTimeSeries([project], salesMap, 24, inputs);
 
     for (const entry of accounting.entries) {
-      expect(entry.netIncome).toBeCloseTo(entry.revenue - entry.expenses, 5);
+      expect(entry.platformFees).toBeCloseTo(entry.revenue * 0.30, 5);
+      expect(entry.cogs).toBeCloseTo(entry.platformFees + entry.projectDevCosts, 5);
+      expect(entry.grossProfit).toBeCloseTo(entry.revenue - entry.cogs, 5);
+      expect(entry.netProfit).toBeCloseTo(entry.grossProfit - entry.fixedExpenses, 5);
+    }
+
+    // Verify platform fees are non-zero for months with revenue
+    const monthsWithRevenue = accounting.entries.filter(e => e.revenue > 0);
+    expect(monthsWithRevenue.length).toBeGreaterThan(0);
+    for (const entry of monthsWithRevenue) {
+      expect(entry.platformFees).toBeGreaterThan(0);
+      expect(entry.grossProfit).toBeLessThan(entry.revenue);
     }
   });
 });

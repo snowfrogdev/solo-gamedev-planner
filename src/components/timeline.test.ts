@@ -72,6 +72,7 @@ const baseInputs: PlannerInputs = {
   monthlyFixedExpenses: 300,
   projectCostBase: 500,
   projectCostPerMonth: 250,
+  platformCutRate: 0.30,
 };
 
 let window: InstanceType<typeof GlobalWindow>;
@@ -124,7 +125,7 @@ describe('createTimeline DOM', () => {
 
     const statsHtml = container.querySelector('.timeline-stats')!.innerHTML;
     expect(statsHtml).toContain('$25,000');
-    expect(statsHtml).toContain('Est. Annual Income');
+    expect(statsHtml).toContain('Est. Annual Net Profit');
   });
 
   test('shows $0 income when no annualized income provided', () => {

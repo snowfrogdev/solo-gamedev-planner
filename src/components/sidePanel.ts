@@ -2,6 +2,7 @@ import * as d3 from 'd3';
 import type { PlannedProject, DowntimeBreakdown, PricingInfo, SalesTimeSeries, SteamGame } from '../types';
 import { fmtCompact } from '../utils/format';
 import { buildComparisonReport, filterByPriceTier } from '../engine/steamComparison';
+import { DEFAULT_PLATFORM_CUT_RATE, computeProjectFinancials } from '../engine/expenses';
 import type { SteamComparisonReport } from '../engine/steamComparison';
 
 function escapeHtml(s: string): string {
@@ -245,9 +246,15 @@ function renderRevenueChart(
 
 // --- Side panel factory ---
 
+interface SidePanelShowOptions {
+  sales?: SalesTimeSeries;
+  steamProvider?: () => Promise<SteamGame[]>;
+  platformCutRate?: number;
+}
+
 export function createSidePanel(
   container: HTMLElement,
-): { show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, sales?: SalesTimeSeries, steamProvider?: () => Promise<SteamGame[]>): void; hide(): void; destroy(): void } {
+): { show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, opts?: SidePanelShowOptions): void; hide(): void; destroy(): void } {
   const overlay = document.createElement('div');
   overlay.className = 'side-panel-overlay';
 
@@ -270,7 +277,8 @@ export function createSidePanel(
     overlay.classList.remove('visible');
   }
 
-  function show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, sales?: SalesTimeSeries, steamProvider?: () => Promise<SteamGame[]>): void {
+  function show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, opts?: SidePanelShowOptions): void {
+    const { sales, steamProvider, platformCutRate } = opts ?? {};
     const cycleDuration = project.devDurationMonths + project.downtimeMonths;
     const showChart = sales && sales.monthlySales.length >= 2;
 
@@ -335,12 +343,33 @@ export function createSidePanel(
           <span>Month 1 Units</span>
           <span class="side-panel-value">${Math.round(sales.m1Units).toLocaleString()}</span>
         </div>
-        <div class="side-panel-row">
-          <span>Total Project Cost</span>
-          <span class="side-panel-value">${fmtUsd(sales.totalExpenses)}</span>
-        </div>
         ` : ''}
       </div>
+      ${sales ? (() => {
+        const totalRevenue = sales.monthlyRevenue.reduce((a, b) => a + b, 0);
+        const cutRate = platformCutRate ?? DEFAULT_PLATFORM_CUT_RATE;
+        const fin = computeProjectFinancials(totalRevenue, sales.totalDevCost, cutRate);
+        return `
+      <div class="side-panel-section">
+        <h3>Financials</h3>
+        <div class="side-panel-row">
+          <span>Total Revenue</span>
+          <span class="side-panel-value">${fmtUsd(fin.totalRevenue)}</span>
+        </div>
+        <div class="side-panel-row sub">
+          <span>Platform Fees (${Math.round(cutRate * 100)}%)</span>
+          <span class="side-panel-value">-${fmtUsd(fin.platformFees)}</span>
+        </div>
+        <div class="side-panel-row sub">
+          <span>Dev Cost</span>
+          <span class="side-panel-value">-${fmtUsd(fin.totalDevCost)}</span>
+        </div>
+        <div class="side-panel-row">
+          <span>Gross Profit</span>
+          <span class="side-panel-value">${fmtUsd(fin.grossProfit)}</span>
+        </div>
+      </div>`;
+      })() : ''}
       ${showChart ? `
       <div class="side-panel-section">
         <h3>Revenue Over Time</h3>

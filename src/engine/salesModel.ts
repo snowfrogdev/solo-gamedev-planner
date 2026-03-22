@@ -65,7 +65,7 @@ export function computeSalesTimeSeries(
   // Per-project variable expenses distributed across dev months
   const totalProjectCost = projectCostBase + devDurationMonths * projectCostPerMonth;
   const weights = devCostWeights(devDurationMonths);
-  const monthlyExpenses = weights.map((w) => totalProjectCost * w);
+  const monthlyDevCosts = weights.map((w) => totalProjectCost * w);
 
   return {
     m1Units,
@@ -77,7 +77,7 @@ export function computeSalesTimeSeries(
     cumulativeYear1,
     cumulativeYear2,
     cumulativeYear5,
-    monthlyExpenses,
-    totalExpenses: totalProjectCost,
+    monthlyDevCosts,
+    totalDevCost: totalProjectCost,
   };
 }

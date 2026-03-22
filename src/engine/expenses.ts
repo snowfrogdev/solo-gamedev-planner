@@ -2,6 +2,15 @@
 export const DEFAULT_MONTHLY_FIXED_EXPENSES = 300;
 export const DEFAULT_PROJECT_COST_BASE = 500;
 export const DEFAULT_PROJECT_COST_PER_MONTH = 250;
+export const DEFAULT_PLATFORM_CUT_RATE = 0.30;
+
+/** Compute per-project lifetime P&L summary from totals. */
+export function computeProjectFinancials(totalRevenue: number, totalDevCost: number, platformCutRate: number) {
+  const platformFees = totalRevenue * platformCutRate;
+  const cogs = platformFees + totalDevCost;
+  const grossProfit = totalRevenue - cogs;
+  return { totalRevenue, platformFees, totalDevCost, cogs, grossProfit };
+}
 
 /**
  * Compute power-law weights for distributing costs across dev months.

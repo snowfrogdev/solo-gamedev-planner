@@ -161,7 +161,7 @@ describe('createSidePanel', () => {
 
   test('show() renders revenue chart section when sales data provided', () => {
     const panel = createSidePanel(container);
-    panel.show(project, breakdown, pricing, sales);
+    panel.show(project, breakdown, pricing, { sales });
 
     const headings = Array.from(container.querySelectorAll('h3'))
       .map((el) => el.textContent!.trim());
@@ -172,7 +172,7 @@ describe('createSidePanel', () => {
 
   test('show() renders revenue chart SVG when sales data provided', () => {
     const panel = createSidePanel(container);
-    panel.show(project, breakdown, pricing, sales);
+    panel.show(project, breakdown, pricing, { sales });
 
     const svg = container.querySelector('.revenue-chart');
     expect(svg).not.toBeNull();

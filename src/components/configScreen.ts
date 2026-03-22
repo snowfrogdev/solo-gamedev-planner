@@ -11,7 +11,7 @@ const SUPPORT_COLOR = '#5b9bd5';
 const RECOVERY_COLOR = '#e07050';
 const TOTAL_COLOR = '#999';
 
-export type ExpenseInputs = Pick<PlannerInputs, 'monthlyFixedExpenses' | 'projectCostBase' | 'projectCostPerMonth'>;
+export type ExpenseInputs = Pick<PlannerInputs, 'monthlyFixedExpenses' | 'projectCostBase' | 'projectCostPerMonth' | 'platformCutRate'>;
 
 export interface ConfigScreenCallbacks {
   onChange: (config: DowntimeConfig) => void;
@@ -68,14 +68,13 @@ export function createConfigScreen(
       <span class="legend-item"><span class="legend-swatch legend-dashed" style="border-color:${TOTAL_COLOR}"></span>Total downtime</span>
     </div>
     <div class="config-editor-container"></div>
-    <h3 class="config-section-title">Expenses</h3>
+    <h3 class="config-section-title">Cost of Goods Sold</h3>
     <div class="config-expense-inputs">
       <div class="config-input-row">
-        <label>Fixed Monthly Expenses</label>
+        <label>Platform Cut</label>
         <div class="config-input-field">
-          <span class="input-prefix">$</span>
-          <input type="number" data-field="fixedExpenses" value="${expenses.monthlyFixedExpenses}" min="0" step="50">
-          <span class="input-suffix">/month</span>
+          <input type="number" data-field="platformCutRate" value="${Math.round(expenses.platformCutRate * 100)}" min="0" max="100" step="1">
+          <span class="input-suffix">%</span>
         </div>
       </div>
       <div class="config-input-row">
@@ -87,6 +86,17 @@ export function createConfigScreen(
           <span class="input-prefix">$</span>
           <input type="number" data-field="projectCostPerMonth" value="${expenses.projectCostPerMonth}" min="0" step="50">
           <span class="input-suffix">)</span>
+        </div>
+      </div>
+    </div>
+    <h3 class="config-section-title">Fixed Monthly Expenses</h3>
+    <div class="config-expense-inputs">
+      <div class="config-input-row">
+        <label>Monthly Overhead</label>
+        <div class="config-input-field">
+          <span class="input-prefix">$</span>
+          <input type="number" data-field="fixedExpenses" value="${expenses.monthlyFixedExpenses}" min="0" step="50">
+          <span class="input-suffix">/month</span>
         </div>
       </div>
     </div>
@@ -305,21 +315,24 @@ export function createConfigScreen(
   render();
 
   // --- Expense inputs ---
-  const fixedExpInput = modal.querySelector<HTMLInputElement>('[data-field="fixedExpenses"]')!;
+  const platformCutInput = modal.querySelector<HTMLInputElement>('[data-field="platformCutRate"]')!;
   const costBaseInput = modal.querySelector<HTMLInputElement>('[data-field="projectCostBase"]')!;
   const costPerMonthInput = modal.querySelector<HTMLInputElement>('[data-field="projectCostPerMonth"]')!;
+  const fixedExpInput = modal.querySelector<HTMLInputElement>('[data-field="fixedExpenses"]')!;
 
   function emitExpenseChange(): void {
     callbacks.onExpenseChange({
-      monthlyFixedExpenses: Math.max(0, parseFloat(fixedExpInput.value) || 0),
+      platformCutRate: Math.max(0, Math.min(100, parseFloat(platformCutInput.value) || 0)) / 100,
       projectCostBase: Math.max(0, parseFloat(costBaseInput.value) || 0),
       projectCostPerMonth: Math.max(0, parseFloat(costPerMonthInput.value) || 0),
+      monthlyFixedExpenses: Math.max(0, parseFloat(fixedExpInput.value) || 0),
     });
   }
 
-  fixedExpInput.addEventListener('change', emitExpenseChange);
+  platformCutInput.addEventListener('change', emitExpenseChange);
   costBaseInput.addEventListener('change', emitExpenseChange);
   costPerMonthInput.addEventListener('change', emitExpenseChange);
+  fixedExpInput.addEventListener('change', emitExpenseChange);
 
   // --- Modal controls ---
   modal.querySelector('.config-close-btn')!.addEventListener('click', callbacks.onClose);

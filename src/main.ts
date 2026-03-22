@@ -10,8 +10,8 @@ import { defaultDowntime, createCustomDowntime } from './engine/downtimeCalculat
 import { computeLaunchPrice } from './engine/pricingModel';
 import { computeSalesTimeSeries } from './engine/salesModel';
 import { optimizeM1Values } from './engine/m1Optimizer';
-import { computeAccountingTimeSeries, computeAnnualizedIncome } from './engine/accountingTimeSeries';
-import { DEFAULT_MONTHLY_FIXED_EXPENSES, DEFAULT_PROJECT_COST_BASE, DEFAULT_PROJECT_COST_PER_MONTH } from './engine/expenses';
+import { computeAccountingTimeSeries, computeAnnualizedNetProfit } from './engine/accountingTimeSeries';
+import { DEFAULT_MONTHLY_FIXED_EXPENSES, DEFAULT_PROJECT_COST_BASE, DEFAULT_PROJECT_COST_PER_MONTH, DEFAULT_PLATFORM_CUT_RATE } from './engine/expenses';
 import { getComparableGames, ensureFetchStarted } from './api/steamSearch';
 import type { DowntimeBreakdown, PricingInfo, SalesTimeSeries, AccountingTimeSeries } from './types';
 
@@ -44,6 +44,7 @@ function openConfig(): void {
         monthlyFixedExpenses: state.inputs.monthlyFixedExpenses,
         projectCostBase: state.inputs.projectCostBase,
         projectCostPerMonth: state.inputs.projectCostPerMonth,
+        platformCutRate: state.inputs.platformCutRate,
       },
       {
         onChange(config) {
@@ -71,6 +72,7 @@ function openConfig(): void {
               monthlyFixedExpenses: DEFAULT_MONTHLY_FIXED_EXPENSES,
               projectCostBase: DEFAULT_PROJECT_COST_BASE,
               projectCostPerMonth: DEFAULT_PROJECT_COST_PER_MONTH,
+              platformCutRate: DEFAULT_PLATFORM_CUT_RATE,
             },
           });
           configScreen?.destroy();
@@ -107,7 +109,7 @@ const timeline = createTimeline(timelineContainer, (project) => {
   const sales = salesMap.get(project.index);
   if (breakdown && pricing) {
     ensureFetchStarted();
-    sidePanel.show(project, breakdown, pricing, sales, () => getComparableGames());
+    sidePanel.show(project, breakdown, pricing, { sales, steamProvider: () => getComparableGames(), platformCutRate: state.inputs.platformCutRate });
   }
 });
 
@@ -143,11 +145,11 @@ function regenerate(): void {
 
   accounting = computeAccountingTimeSeries(plan.projects, salesMap, plan.totalMonths, state.inputs);
 
-  const annualizedIncome = accounting.entries.length > 0
-    ? computeAnnualizedIncome(accounting, state.inputs.timeHorizonMonths, state.inputs.targetDevScope)
+  const annualizedNetProfit = accounting.entries.length > 0
+    ? computeAnnualizedNetProfit(accounting, state.inputs.timeHorizonMonths, state.inputs.targetDevScope)
     : 0;
 
-  timeline.update(plan, state.inputs, accounting, annualizedIncome);
+  timeline.update(plan, state.inputs, accounting, annualizedNetProfit);
   sidePanel.hide();
 }
 
