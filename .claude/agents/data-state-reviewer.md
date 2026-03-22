@@ -349,4 +349,6 @@ When operating as a teammate in a review team:
 
 3. **Cross-review discussion**: If you receive a broadcast message asking for cross-review commentary, respond ONLY if you have substantive input from your domain perspective. Send cross-review comments as a message to the team lead.
 
-4. **Delivery fallback**: If SendMessage fails or you cannot confirm team membership, still include your complete review findings in your final text output. This ensures the orchestrator can capture your work even if team message delivery is degraded.
+4. **Delivery assurance**: Your SendMessage call writes findings to the team inbox file, which the team lead reads directly. Even if the message is not delivered as a conversation turn (a known VS Code limitation), your findings WILL be collected from the inbox file. Always call SendMessage — do not skip it. Do NOT attempt to deliver findings through any other channel (text output from teammates is not visible to the team lead).
+
+5. **Tool resilience**: You may use tools (Read, Grep, Bash, etc.) to explore the codebase for additional context if needed. However, if any tool call fails or is denied, do not retry it — continue your review using the code provided in your task prompt, which contains all the material needed for a thorough review. Never let a tool failure prevent you from completing and delivering your findings.

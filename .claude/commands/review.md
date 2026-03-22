@@ -122,14 +122,15 @@ For each discovered reviewer, spawn **one teammate** using the Task tool with te
 - `name`: The reviewer's name (e.g., `"naming-reviewer"`)
 - `subagent_type`: The matching agent type from the `.md` filename (e.g., `"naming-reviewer"`)
 - `prompt`: The constructed prompt from Step 3.2
+- `mode`: `"bypassPermissions"` — **required** to prevent invisible permission deadlocks in VS Code (teammate permission prompts are not surfaced in VS Code extension mode, causing agents to hang indefinitely)
 
-### Parallel Execution
+### Sequential Execution
 
-Launch ALL reviewer teammates in parallel. Do not wait for one to be spawned before starting another.
+Spawn reviewer teammates **sequentially** — one at a time. Wait for each Agent call to return a successful spawn confirmation before starting the next. This avoids race conditions during team registration that can cause teammates to fail to join the team. Do NOT use parallel Agent tool calls for spawning.
 
 **Total teammates = number of discovered reviewer files** (not a subset based on perceived relevance)
 
-Example: 5 reviewer files discovered -> 5 parallel Task invocations with `team_name` set to the actual name returned by TeamCreate
+Example: 5 reviewer files discovered -> 5 sequential Agent invocations, each waiting for the previous to confirm before proceeding
 
 ### Step 3.4: Track Expected Responses
 
@@ -170,9 +171,22 @@ As each reviewer's message arrives, mark it as received on your tracking checkli
 - If a teammate goes idle **without** having sent findings, it may have failed. Note this in the report and recommend manual review for that aspect.
 - If a teammate stops responding entirely, proceed without it after a reasonable wait.
 
+### Inbox Fallback Collection (VS Code Workaround)
+
+In VS Code extension mode, SendMessage delivery from teammates to the team lead is unreliable — messages are written to the inbox file but may not surface as conversation turns. After all teammates have gone idle (idle notifications ARE reliably delivered), proactively collect any missing findings:
+
+1. Read the inbox file at `~/.claude/teams/{actual-team-name}/inboxes/team-lead.json`
+2. This is a JSON array of message objects, each with `"from"` (reviewer name) and `"text"` (findings content) fields
+3. For each reviewer that has NOT reported via normal message delivery, find their message(s) in the inbox array
+4. Skip messages where `"text"` contains `"permission_request"` — these are stuck tool approvals, not findings
+5. Extract the findings text and use it as if it were delivered normally
+6. Mark those reviewers as received on the tracking checklist
+
+**When to trigger:** After the FIRST round of idle notifications arrives (typically within 60–90 seconds of spawning), check the inbox for ALL reviewers — do not wait for messages to arrive via conversation turns first. Treat inbox reading as the **primary** collection method, not a fallback.
+
 ### Delivery Verification
 
-If significantly fewer reviewers than expected report back (fewer than half), suspect a team membership issue. Read the team config file at `~/.claude/teams/<actual-team-name>/config.json` to verify all expected reviewers appear in the `members` array. If reviewers are missing, they failed to join the team — note this in the final report and recommend manual review for those aspects.
+If after reading the inbox, some reviewers still have no findings (no message in inbox at all), suspect a team membership issue. Read the team config file at `~/.claude/teams/<actual-team-name>/config.json` to verify all expected reviewers appear in the `members` array. If reviewers are missing, they failed to join the team — note this in the final report and recommend manual review for those aspects.
 
 ### Cross-Reviewer Analysis
 
@@ -361,6 +375,7 @@ If `TeamDelete` fails because teammates are still active, inform the user and su
 | Team creation fails             | Report error, suggest checking agent teams is enabled in settings |
 | TeamCreate returns different name | Use the returned name for all operations. This means an orphaned team existed — inform the user at cleanup time. |
 | Teammate fails to send findings | Note in report, recommend manual review for that aspect           |
+| Messages not delivered (VS Code) | Read findings directly from `~/.claude/teams/{team-name}/inboxes/team-lead.json` — see Inbox Fallback Collection |
 | Reviewer timeout                | Note in report, proceed with available results                    |
 | A reviewer fails                | Flag prominently, continue with other reviewers                   |
 | All reviewers fail              | Report failure, suggest manual review                             |
