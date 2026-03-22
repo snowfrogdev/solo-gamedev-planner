@@ -29,6 +29,7 @@ export interface PlannedProject {
   index: number;
   startMonth: number;
   devDurationMonths: number;
+  rawDevDuration: number;
   endMonth: number;
   downtimeMonths: number;
   cycleEndMonth: number;

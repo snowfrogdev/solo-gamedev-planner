@@ -121,8 +121,17 @@ function regenerate(): void {
 
   const plan = generatePlan(state.inputs, (d) => downtimeFn(d));
 
+  // Scale breakdown sub-items proportionally to match the rounded total downtime
   breakdowns = new Map(
-    plan.projects.map((p) => [p.index, downtimeFn(p.devDurationMonths)]),
+    plan.projects.map((p) => {
+      const raw = downtimeFn(p.rawDevDuration);
+      const scale = raw.total > 0 ? p.downtimeMonths / raw.total : 0;
+      return [p.index, {
+        total: p.downtimeMonths,
+        postLaunchSupport: raw.postLaunchSupport * scale,
+        creativeRecovery: raw.creativeRecovery * scale,
+      }];
+    }),
   );
   pricingMap = new Map(
     plan.projects.map((p) => [p.index, computeLaunchPrice(p.devDurationMonths)]),

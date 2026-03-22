@@ -32,7 +32,7 @@ export function computeAccountingTimeSeries(
     if (!sales) continue;
 
     for (let i = 0; i < sales.monthlyRevenue.length; i++) {
-      const calendarMonth = Math.floor(project.endMonth) + i;
+      const calendarMonth = project.endMonth + i;
       if (calendarMonth >= length) break;
       const rev = sales.monthlyRevenue[i];
       entries[calendarMonth].revenue += rev;
@@ -51,7 +51,7 @@ export function computeAccountingTimeSeries(
     const weights = devCostWeights(project.devDurationMonths);
 
     for (let i = 0; i < weights.length; i++) {
-      const calendarMonth = Math.floor(project.startMonth) + i;
+      const calendarMonth = project.startMonth + i;
       if (calendarMonth >= length) break;
       entries[calendarMonth].projectDevCosts += totalCost * weights[i];
     }

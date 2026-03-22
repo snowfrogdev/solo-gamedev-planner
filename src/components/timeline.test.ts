@@ -6,8 +6,8 @@ import type { PlannedProject, GeneratedPlan, PlannerInputs } from '../types';
 // --- Pure function tests (no DOM needed) ---
 
 const projects: PlannedProject[] = [
-  { index: 0, startMonth: 0, devDurationMonths: 3, endMonth: 3, downtimeMonths: 1, cycleEndMonth: 4 },
-  { index: 1, startMonth: 4, devDurationMonths: 6, endMonth: 10, downtimeMonths: 2, cycleEndMonth: 12 },
+  { index: 0, startMonth: 0, devDurationMonths: 3, rawDevDuration: 3, endMonth: 3, downtimeMonths: 1, cycleEndMonth: 4 },
+  { index: 1, startMonth: 4, devDurationMonths: 6, rawDevDuration: 6, endMonth: 10, downtimeMonths: 2, cycleEndMonth: 12 },
 ];
 
 describe('findProjectAtMonth', () => {

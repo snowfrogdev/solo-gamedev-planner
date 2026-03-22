@@ -31,15 +31,19 @@ function buildSequence(
   let currentMonth = 0;
   for (let i = 0; i < durations.length; i++) {
     const dev = durations[i];
-    const end = currentMonth + dev;
+    // Round to whole months so project bars align with the monthly revenue chart
+    const end = Math.round(currentMonth + dev);
+    const roundedDev = end - currentMonth;
     const down = getDowntime(dev);
-    const cycleEnd = end + down.total;
+    const cycleEnd = Math.round(end + down.total);
+    const roundedDown = cycleEnd - end;
     projects.push({
       index: i,
       startMonth: currentMonth,
-      devDurationMonths: dev,
+      devDurationMonths: roundedDev,
+      rawDevDuration: dev,
       endMonth: end,
-      downtimeMonths: down.total,
+      downtimeMonths: roundedDown,
       cycleEndMonth: cycleEnd,
     });
     currentMonth = cycleEnd;
@@ -53,7 +57,9 @@ function totalTimeForDurations(
 ): number {
   let total = 0;
   for (const dur of durations) {
-    total += dur + getDowntime(dur).total;
+    const end = Math.round(total + dur);
+    const cycleEnd = Math.round(end + getDowntime(dur).total);
+    total = cycleEnd;
   }
   return total;
 }

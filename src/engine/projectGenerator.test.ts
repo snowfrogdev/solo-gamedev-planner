@@ -183,4 +183,21 @@ describe('generatePlan', () => {
       && Math.abs(plan1.totalMonths - plan2.totalMonths) < 0.01;
     expect(same).toBe(false);
   });
+
+  test('all month boundaries are integers after rounding', () => {
+    const plan = generatePlan(baseInputs);
+    for (const p of plan.projects) {
+      expect(Number.isInteger(p.startMonth)).toBe(true);
+      expect(Number.isInteger(p.endMonth)).toBe(true);
+      expect(Number.isInteger(p.cycleEndMonth)).toBe(true);
+    }
+  });
+
+  test('handles zero-downtime function gracefully', () => {
+    const zeroDowntime = (_d: number) => ({ total: 0, postLaunchSupport: 0, creativeRecovery: 0 });
+    const plan = generatePlan(baseInputs, zeroDowntime);
+    for (const p of plan.projects) {
+      expect(p.downtimeMonths).toBe(0);
+    }
+  });
 });

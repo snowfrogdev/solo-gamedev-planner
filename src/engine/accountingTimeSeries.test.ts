@@ -19,6 +19,7 @@ function makeProject(index: number, endMonth: number, devDuration: number): Plan
     index,
     startMonth: endMonth - devDuration,
     devDurationMonths: devDuration,
+    rawDevDuration: devDuration,
     endMonth,
     downtimeMonths: 1,
     cycleEndMonth: endMonth + 1,
