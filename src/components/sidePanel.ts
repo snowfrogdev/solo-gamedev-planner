@@ -1,6 +1,12 @@
 import * as d3 from 'd3';
-import type { PlannedProject, DowntimeBreakdown, PricingInfo, SalesTimeSeries } from '../types';
+import type { PlannedProject, DowntimeBreakdown, PricingInfo, SalesTimeSeries, SteamGame } from '../types';
 import { fmtCompact } from '../utils/format';
+import { buildComparisonReport, filterByPriceTier } from '../engine/steamComparison';
+import type { SteamComparisonReport } from '../engine/steamComparison';
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 function fmtMonths(n: number): string {
   return n.toFixed(1);
@@ -241,7 +247,7 @@ function renderRevenueChart(
 
 export function createSidePanel(
   container: HTMLElement,
-): { show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, sales?: SalesTimeSeries): void; hide(): void; destroy(): void } {
+): { show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, sales?: SalesTimeSeries, steamProvider?: () => Promise<SteamGame[]>): void; hide(): void; destroy(): void } {
   const overlay = document.createElement('div');
   overlay.className = 'side-panel-overlay';
 
@@ -264,7 +270,7 @@ export function createSidePanel(
     overlay.classList.remove('visible');
   }
 
-  function show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, sales?: SalesTimeSeries): void {
+  function show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, sales?: SalesTimeSeries, steamProvider?: () => Promise<SteamGame[]>): void {
     const cycleDuration = project.devDurationMonths + project.downtimeMonths;
     const showChart = sales && sales.monthlySales.length >= 2;
 
@@ -341,6 +347,14 @@ export function createSidePanel(
         <div class="revenue-chart-container"></div>
       </div>
       ` : ''}
+      ${sales && steamProvider ? `
+      <div class="side-panel-section">
+        <h3>Steam Comparison</h3>
+        <div class="steam-comparison-container">
+          <button class="compare-btn">Compare with Steam Games</button>
+        </div>
+      </div>
+      ` : ''}
     `;
 
     panel.querySelector('.close-btn')!.addEventListener('click', hide);
@@ -352,7 +366,64 @@ export function createSidePanel(
       }
     }
 
+    if (sales && steamProvider) {
+      const compareBtn = panel.querySelector<HTMLButtonElement>('.compare-btn');
+      const compContainer = panel.querySelector<HTMLElement>('.steam-comparison-container');
+      if (compareBtn && compContainer) {
+        compareBtn.addEventListener('click', async () => {
+          compareBtn.disabled = true;
+          compareBtn.textContent = 'Comparing...';
+          try {
+            const priceCents = Math.round(pricing.launchPrice * 100);
+            const allGames = await steamProvider();
+            const priceMatched = filterByPriceTier(allGames, priceCents);
+            const report = buildComparisonReport(priceMatched, sales.m1Units, sales.tailStrength);
+            renderComparisonReport(compContainer, report, pricing.launchPrice);
+          } catch {
+            compContainer.innerHTML = '<p class="compare-error">Failed to load Steam comparison data.</p>';
+          }
+        });
+      }
+    }
+
     overlay.classList.add('visible');
+  }
+
+  function renderComparisonReport(
+    container: HTMLElement,
+    report: SteamComparisonReport,
+    launchPrice: number,
+  ): void {
+    if (report.totalGames === 0) {
+      container.innerHTML = '<p class="compare-empty">No comparable games found at this price tier.</p>';
+      return;
+    }
+
+    const pctValue = Math.round(report.percentile * 100);
+    const gamesList = report.closest.map((r) => {
+      const sign = r.rating >= 0 ? '+' : '';
+      const cls = r.rating >= 0 ? 'positive' : 'negative';
+      const safeName = escapeHtml(r.game.name);
+      const safeUrl = r.game.storeUrl.startsWith('https://store.steampowered.com/') ? r.game.storeUrl : '#';
+      return `
+        <li class="comp-game">
+          <a href="${safeUrl}" target="_blank" rel="noopener">${safeName}</a>
+          <span class="comp-meta">
+            <span class="comp-rating ${cls}">${sign}${r.rating.toFixed(2)}</span>
+            <span class="comp-sales">~${r.game.estimatedSales.toLocaleString()} sales</span>
+          </span>
+        </li>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="percentile-display">
+        <span class="percentile-value">${pctValue}%</span>
+        <span class="percentile-label">of indie games at that price point sold fewer copies</span>
+      </div>
+      <h4>Most Similar Games</h4>
+      <ul class="comparable-games-list">${gamesList}</ul>
+      <p class="comp-note">Based on ${report.totalGames} games at $${launchPrice.toFixed(2)} released in last 24 months</p>
+    `;
   }
 
   function destroy(): void {

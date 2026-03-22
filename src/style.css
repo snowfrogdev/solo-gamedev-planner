@@ -620,6 +620,122 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   z-index: 10;
 }
 
+/* Steam Comparison */
+
+.compare-btn {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-h);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.compare-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.compare-loading,
+.compare-error,
+.compare-empty {
+  font-size: 0.8rem;
+  color: var(--text);
+  font-style: italic;
+  padding: 0.5rem 0;
+}
+
+.compare-error {
+  color: #e05050;
+}
+
+.percentile-display {
+  text-align: center;
+  padding: 0.75rem 0;
+}
+
+.percentile-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.percentile-label {
+  font-size: 0.75rem;
+  color: var(--text);
+}
+
+.comparable-games-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.comp-game {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.3rem 0;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.comp-game:last-child {
+  border-bottom: none;
+}
+
+.comp-game a {
+  color: var(--text-h);
+  text-decoration: none;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 0.5rem;
+}
+
+.comp-game a:hover {
+  color: var(--accent);
+}
+
+.comp-meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.comp-rating {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.comp-rating.positive {
+  color: #70ad47;
+}
+
+.comp-rating.negative {
+  color: #e05050;
+}
+
+.comp-sales {
+  color: var(--text);
+}
+
+.comp-note {
+  font-size: 0.7rem;
+  color: var(--text);
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+
 @media (max-width: 768px) {
   .slider-columns {
     flex-direction: column;

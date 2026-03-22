@@ -12,6 +12,7 @@ import { computeSalesTimeSeries } from './engine/salesModel';
 import { optimizeM1Values } from './engine/m1Optimizer';
 import { computeAccountingTimeSeries, computeAnnualizedIncome } from './engine/accountingTimeSeries';
 import { DEFAULT_MONTHLY_FIXED_EXPENSES, DEFAULT_PROJECT_COST_BASE, DEFAULT_PROJECT_COST_PER_MONTH } from './engine/expenses';
+import { getComparableGames, ensureFetchStarted } from './api/steamSearch';
 import type { DowntimeBreakdown, PricingInfo, SalesTimeSeries, AccountingTimeSeries } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -104,7 +105,10 @@ const timeline = createTimeline(timelineContainer, (project) => {
   const breakdown = breakdowns.get(project.index);
   const pricing = pricingMap.get(project.index);
   const sales = salesMap.get(project.index);
-  if (breakdown && pricing) sidePanel.show(project, breakdown, pricing, sales);
+  if (breakdown && pricing) {
+    ensureFetchStarted();
+    sidePanel.show(project, breakdown, pricing, sales, () => getComparableGames());
+  }
 });
 
 // React to state changes
@@ -151,3 +155,4 @@ subscribe(regenerate);
 
 // Initial render
 regenerate();
+
