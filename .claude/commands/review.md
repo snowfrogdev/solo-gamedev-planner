@@ -94,10 +94,14 @@ If no reviewer agents are found:
 
 ### Step 3.1: Create the Review Team
 
+**Pre-cleanup:** Before creating, attempt to delete any orphaned team from a previous review session. Call `TeamDelete` — if it fails (no existing team), ignore the error and proceed.
+
 Use the `TeamCreate` tool to create the review team:
 
 - `team_name`: `"code-review"`
 - `description`: `"Code review session for [brief description of the review target]"`
+
+**CRITICAL — Capture the actual team name:** `TeamCreate` may assign a different name than requested if `"code-review"` already exists on disk (e.g., orphaned from a prior session). You MUST read the `team_name` field from the tool's response and use that value — not the literal string `"code-review"` — for ALL subsequent operations: spawning teammates, sending messages, tracking, and cleanup. If the returned name differs from `"code-review"`, this is normal — proceed with the returned name.
 
 ### Step 3.2: Construct Reviewer Prompts
 
@@ -114,7 +118,7 @@ Construct a prompt for each reviewer type that includes:
 
 For each discovered reviewer, spawn **one teammate** using the Task tool with team parameters:
 
-- `team_name`: `"code-review"`
+- `team_name`: The actual team name returned by TeamCreate in Step 3.1 (NOT the hardcoded string `"code-review"`)
 - `name`: The reviewer's name (e.g., `"naming-reviewer"`)
 - `subagent_type`: The matching agent type from the `.md` filename (e.g., `"naming-reviewer"`)
 - `prompt`: The constructed prompt from Step 3.2
@@ -125,7 +129,7 @@ Launch ALL reviewer teammates in parallel. Do not wait for one to be spawned bef
 
 **Total teammates = number of discovered reviewer files** (not a subset based on perceived relevance)
 
-Example: 5 reviewer files discovered -> 5 parallel Task invocations with `team_name: "code-review"` (always)
+Example: 5 reviewer files discovered -> 5 parallel Task invocations with `team_name` set to the actual name returned by TeamCreate
 
 ### Step 3.4: Track Expected Responses
 
@@ -165,6 +169,10 @@ As each reviewer's message arrives, mark it as received on your tracking checkli
 
 - If a teammate goes idle **without** having sent findings, it may have failed. Note this in the report and recommend manual review for that aspect.
 - If a teammate stops responding entirely, proceed without it after a reasonable wait.
+
+### Delivery Verification
+
+If significantly fewer reviewers than expected report back (fewer than half), suspect a team membership issue. Read the team config file at `~/.claude/teams/<actual-team-name>/config.json` to verify all expected reviewers appear in the `members` array. If reviewers are missing, they failed to join the team — note this in the final report and recommend manual review for those aspects.
 
 ### Cross-Reviewer Analysis
 
@@ -337,7 +345,7 @@ Wait for teammates to acknowledge the shutdown. If a teammate does not respond, 
 
 Once all teammates have shut down (or after a reasonable wait), call `TeamDelete` to remove the team and task directories.
 
-If `TeamDelete` fails because teammates are still active, inform the user and suggest they check `~/.claude/teams/code-review/` for cleanup.
+If `TeamDelete` fails because teammates are still active, inform the user and suggest they check `~/.claude/teams/<actual-team-name>/` for cleanup (provide the actual team name used for this session). Also check for and mention any orphaned `~/.claude/teams/code-review/` directory that should be manually deleted.
 
 ---
 
@@ -351,6 +359,7 @@ If `TeamDelete` fails because teammates are still active, inform the user and su
 | Git command fails               | Report error, suggest checking git status                         |
 | PR not found                    | Report error, verify PR number/URL                                |
 | Team creation fails             | Report error, suggest checking agent teams is enabled in settings |
+| TeamCreate returns different name | Use the returned name for all operations. This means an orphaned team existed — inform the user at cleanup time. |
 | Teammate fails to send findings | Note in report, recommend manual review for that aspect           |
 | Reviewer timeout                | Note in report, proceed with available results                    |
 | A reviewer fails                | Flag prominently, continue with other reviewers                   |

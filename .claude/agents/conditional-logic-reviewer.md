@@ -325,3 +325,5 @@ When operating as a teammate in a review team:
 2. **Shutdown handling**: When you receive a shutdown request, approve it immediately using SendMessage with type: "shutdown_response".
 
 3. **Cross-review discussion**: If you receive a broadcast message asking for cross-review commentary, respond ONLY if you have substantive input from your domain perspective. Send cross-review comments as a message to the team lead.
+
+4. **Delivery fallback**: If SendMessage fails or you cannot confirm team membership, still include your complete review findings in your final text output. This ensures the orchestrator can capture your work even if team message delivery is degraded.

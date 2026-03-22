@@ -12,7 +12,9 @@
       "Bash(bun run:*)",
       "Bash(bun add:*)",
       "Bash(bun test:*)",
-      "Bash(git diff:*)"
+      "Bash(git diff:*)",
+      "WebFetch(domain:steamspy.com)",
+      "WebFetch(domain:store.steampowered.com)"
     ]
   }
 }
