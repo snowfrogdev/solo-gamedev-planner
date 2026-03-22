@@ -89,3 +89,16 @@ export interface AccountingTimeSeries {
   entries: MonthlyAccountingEntry[];
   revenueByProject: number[][];  // [projectIndex][calendarMonth]
 }
+
+/** A Steam game with estimated sales data, used for market comparison */
+export interface SteamGame {
+  appid: number;
+  name: string;
+  totalReviews: number;
+  reviewPositivePct: number;
+  priceInCents: number;         // original (non-discounted) price
+  releaseDate: Date;
+  monthsSinceRelease: number;
+  estimatedSales: number;       // derived from totalReviews × review-to-sales multiplier
+  storeUrl: string;
+}
