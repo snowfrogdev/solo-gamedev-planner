@@ -13,6 +13,7 @@
       "Bash(bun add:*)",
       "Bash(bun test:*)",
       "Bash(git diff:*)",
+      "Bash(grep:*)",
       "WebFetch(domain:steamspy.com)",
       "WebFetch(domain:store.steampowered.com)"
     ]
