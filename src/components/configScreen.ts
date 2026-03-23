@@ -2,6 +2,7 @@ import * as d3 from 'd3';
 import type { BezierCurve, Point, DowntimeConfig, PlannerInputs } from '../types';
 import { createInterpolator } from '../engine/curveInterpolator';
 import { DOWNTIME_X_MIN, DOWNTIME_X_MAX } from '../engine/downtimeDefaults';
+import { createFocusTrap } from '../utils/focusTrap';
 
 const MARGIN = { top: 20, right: 20, bottom: 40, left: 50 };
 const TOTAL_SAMPLES = 80;
@@ -61,6 +62,9 @@ export function createConfigScreen(
 
   const modal = document.createElement('div');
   modal.className = 'config-modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-label', 'Advanced Settings');
 
   modal.innerHTML = `
     <div class="config-header">
@@ -69,8 +73,8 @@ export function createConfigScreen(
     </div>
     <h3 class="config-section-title">Downtime Formula</h3>
     <p class="config-description">
-      Drag handles to shape how downtime scales with project duration.
-      Total downtime (dashed) = support + recovery.
+      Drag the colored dots to shape how downtime scales with project duration.
+      Endpoints move vertically; control handles move freely. Total downtime (dashed) = support + recovery.
     </p>
     <div class="curve-legend">
       <span class="legend-item"><span class="legend-swatch" style="background:${SUPPORT_COLOR}"></span>Post-launch support</span>
@@ -143,7 +147,9 @@ export function createConfigScreen(
     .append('svg')
     .attr('class', 'curve-editor')
     .attr('viewBox', `0 0 ${width} ${height}`)
-    .attr('preserveAspectRatio', 'xMidYMid meet');
+    .attr('preserveAspectRatio', 'xMidYMid meet')
+    .attr('role', 'img')
+    .attr('aria-label', 'Interactive bezier curve editor for downtime formula. Drag control points to adjust curves.');
 
   const g = svg.append('g')
     .attr('transform', `translate(${MARGIN.left}, ${MARGIN.top})`);
@@ -336,18 +342,28 @@ export function createConfigScreen(
   const fixedExpInput = modal.querySelector<HTMLInputElement>('[data-field="fixedExpenses"]')!;
 
   function emitExpenseChange(): void {
+    const platformCut = Math.max(0, Math.min(100, parseFloat(platformCutInput.value) || 0));
+    const costBase = Math.max(0, parseFloat(costBaseInput.value) || 0);
+    const costPerMonth = Math.max(0, parseFloat(costPerMonthInput.value) || 0);
+    const fixedExp = Math.max(0, parseFloat(fixedExpInput.value) || 0);
+
+    platformCutInput.value = String(platformCut);
+    costBaseInput.value = String(costBase);
+    costPerMonthInput.value = String(costPerMonth);
+    fixedExpInput.value = String(fixedExp);
+
     callbacks.onExpenseChange({
-      platformCutRate: Math.max(0, Math.min(100, parseFloat(platformCutInput.value) || 0)) / 100,
-      projectCostBase: Math.max(0, parseFloat(costBaseInput.value) || 0),
-      projectCostPerMonth: Math.max(0, parseFloat(costPerMonthInput.value) || 0),
-      monthlyFixedExpenses: Math.max(0, parseFloat(fixedExpInput.value) || 0),
+      platformCutRate: platformCut / 100,
+      projectCostBase: costBase,
+      projectCostPerMonth: costPerMonth,
+      monthlyFixedExpenses: fixedExp,
     });
   }
 
-  platformCutInput.addEventListener('change', emitExpenseChange);
-  costBaseInput.addEventListener('change', emitExpenseChange);
-  costPerMonthInput.addEventListener('change', emitExpenseChange);
-  fixedExpInput.addEventListener('change', emitExpenseChange);
+  for (const input of [platformCutInput, costBaseInput, costPerMonthInput, fixedExpInput]) {
+    input.addEventListener('change', emitExpenseChange);
+    input.addEventListener('blur', emitExpenseChange);
+  }
 
   // --- Modal controls ---
   modal.querySelector('.config-close-btn')!.addEventListener('click', callbacks.onClose);
@@ -359,10 +375,32 @@ export function createConfigScreen(
     if (e.target === overlay) callbacks.onClose();
   });
 
+  function onKeyDown(e: KeyboardEvent): void {
+    if (e.key === 'Escape') callbacks.onClose();
+  }
+
+  const trap = createFocusTrap(modal);
+  let previouslyFocused: HTMLElement | null = null;
+
   return {
-    show() { overlay.classList.add('visible'); },
-    hide() { overlay.classList.remove('visible'); },
-    destroy() { svg.remove(); overlay.remove(); },
+    show() {
+      previouslyFocused = document.activeElement as HTMLElement | null;
+      overlay.classList.add('visible');
+      document.addEventListener('keydown', onKeyDown);
+      trap.activate();
+    },
+    hide() {
+      trap.deactivate();
+      document.removeEventListener('keydown', onKeyDown);
+      overlay.classList.remove('visible');
+      previouslyFocused?.focus();
+    },
+    destroy() {
+      trap.deactivate();
+      document.removeEventListener('keydown', onKeyDown);
+      svg.remove();
+      overlay.remove();
+    },
     updateCacheTimestamp(ts: number) {
       const el = modal.querySelector('.steam-cache-status');
       if (el) el.textContent = formatCacheAge(ts);

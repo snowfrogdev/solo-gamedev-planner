@@ -4,6 +4,7 @@ import { fmtCompact } from '../utils/format';
 import { buildComparisonReport, filterByPriceTier } from '../engine/steamComparison';
 import { DEFAULT_PLATFORM_CUT_RATE, computeProjectFinancials } from '../engine/expenses';
 import type { SteamComparisonReport, SalesBreakdown } from '../engine/steamComparison';
+import { createFocusTrap } from '../utils/focusTrap';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -283,6 +284,8 @@ export function createSidePanel(
 
   const panel = document.createElement('aside');
   panel.className = 'side-panel';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
 
   overlay.appendChild(panel);
   container.appendChild(overlay);
@@ -294,13 +297,20 @@ export function createSidePanel(
   function onKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Escape') hide();
   }
-  document.addEventListener('keydown', onKeyDown);
+
+  const trap = createFocusTrap(panel);
+  let previouslyFocused: HTMLElement | null = null;
 
   function hide(): void {
+    trap.deactivate();
+    document.removeEventListener('keydown', onKeyDown);
     overlay.classList.remove('visible');
+    previouslyFocused?.focus();
   }
 
   function show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, opts?: SidePanelShowOptions): void {
+    previouslyFocused = document.activeElement as HTMLElement | null;
+    panel.setAttribute('aria-label', `Game #${project.index + 1} Details`);
     const { sales, steamProvider, platformCutRate, detailFetcher } = opts ?? {};
     const cycleDuration = project.devDurationMonths + project.downtimeMonths;
     const showChart = sales && sales.monthlySales.length >= 2;
@@ -420,6 +430,8 @@ export function createSidePanel(
 
     // Make overlay visible before rendering chart so clientWidth is available
     overlay.classList.add('visible');
+    document.addEventListener('keydown', onKeyDown);
+    trap.activate();
 
     if (showChart) {
       const chartContainer = panel.querySelector<HTMLElement>('.revenue-chart-container');
@@ -521,6 +533,7 @@ export function createSidePanel(
   }
 
   function destroy(): void {
+    trap.deactivate();
     document.removeEventListener('keydown', onKeyDown);
     overlay.remove();
   }

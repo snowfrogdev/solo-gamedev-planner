@@ -43,7 +43,7 @@ function renderStats(
     <div class="stat"><span class="stat-value">${plan.totalMonths.toFixed(1)}</span><span class="stat-label">Total Months</span></div>
     <div class="stat"><span class="stat-value">${avgDev.toFixed(1)}mo</span><span class="stat-label">Avg Dev Time</span></div>
     <div class="stat"><span class="stat-value">${avgDown.toFixed(1)}mo</span><span class="stat-label">Avg Downtime</span></div>
-    <div class="stat"><span class="stat-value">$${Math.round(annualizedNetProfit).toLocaleString()}</span><span class="stat-label stat-label-with-tooltip">Avg. Annual Net Profit<span class="stat-tooltip">Net profit averaged over the final ${trailingMonths} months of the plan, annualized to 12 months</span></span></div>
+    <div class="stat stat-accent"><span class="stat-value">$${Math.round(annualizedNetProfit).toLocaleString()}</span><span class="stat-label stat-label-with-tooltip" tabindex="0">Avg. Annual Net Profit<span class="stat-tooltip">Net profit averaged over the final ${trailingMonths} months of the plan, annualized to 12 months</span></span></div>
   `;
   container.appendChild(statsEl);
 }
@@ -164,10 +164,21 @@ function drawProjectBars(
     .append('g')
     .attr('class', 'project-group');
 
+  projects
+    .attr('aria-label', (d: PlannedProject) => `Game ${d.index + 1}: ${d.devDurationMonths.toFixed(1)} months development`);
+
   if (onProjectClick) {
     projects
+      .attr('tabindex', '0')
+      .attr('role', 'button')
       .style('cursor', 'pointer')
-      .on('click', (_event: MouseEvent, d: PlannedProject) => onProjectClick(d));
+      .on('click', (_event: MouseEvent, d: PlannedProject) => onProjectClick(d))
+      .on('keydown', (event: KeyboardEvent, d: PlannedProject) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onProjectClick(d);
+        }
+      });
   }
 
   // Dev bars
@@ -311,12 +322,17 @@ export function createTimeline(
       return;
     }
 
-    renderStats(container, plan, annualizedNetProfit ?? 0, inputs.targetDevScope);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'timeline-content';
+    wrapper.style.opacity = '0';
+    container.appendChild(wrapper);
+
+    renderStats(wrapper, plan, annualizedNetProfit ?? 0, inputs.targetDevScope);
 
     // Chart wrapper (for tooltip positioning)
     const chartWrapper = document.createElement('div');
     chartWrapper.style.position = 'relative';
-    container.appendChild(chartWrapper);
+    wrapper.appendChild(chartWrapper);
 
     const width = container.clientWidth || 800;
     const barBandTop = CHART_HEIGHT - MARGIN.bottom - BAR_BAND_HEIGHT;
@@ -327,7 +343,9 @@ export function createTimeline(
       .attr('class', 'timeline-chart')
       .attr('width', '100%')
       .attr('height', CHART_HEIGHT)
-      .attr('viewBox', `0 0 ${width} ${CHART_HEIGHT}`);
+      .attr('viewBox', `0 0 ${width} ${CHART_HEIGHT}`)
+      .attr('role', 'img')
+      .attr('aria-label', `Timeline chart showing ${plan.projects.length} game projects over ${Math.round(plan.totalMonths)} months`);
 
     const xMax = Math.max(inputs.timeHorizonMonths, plan.totalMonths);
     const xScale = d3.scaleLinear()
@@ -354,6 +372,21 @@ export function createTimeline(
     const barY = barBandTop + (BAR_BAND_HEIGHT - BAR_HEIGHT) / 2;
     drawProjectBars(svg, plan, xScale, barY, onProjectClick);
     addTimelineTooltip(svg, chartWrapper, plan, accounting, xScale, yScale, colorScale, xMax, width);
+
+    // Onboarding hint
+    if (onProjectClick) {
+      const hint = document.createElement('p');
+      hint.className = 'chart-hint';
+      hint.textContent = 'Click a project bar to see detailed projections';
+      wrapper.appendChild(hint);
+    }
+
+    // Fade in
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(() => { wrapper.style.opacity = '1'; });
+    } else {
+      wrapper.style.opacity = '1';
+    }
   }
 
   return { update };

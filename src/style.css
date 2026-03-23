@@ -1,5 +1,5 @@
 :root {
-  --text: #6b6375;
+  --text: #5e5668;
   --text-h: #1a1a2e;
   --bg: #fafafa;
   --surface: #ffffff;
@@ -135,17 +135,22 @@ input[type="range"] {
   height: 6px;
   border-radius: 3px;
   background: var(--border);
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   cursor: pointer;
   position: relative;
   z-index: 1;
 }
 
+input[type="range"]:focus-visible {
+  outline-color: var(--accent);
+}
+
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--surface);
@@ -159,8 +164,8 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 input[type="range"]::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--surface);
@@ -198,6 +203,15 @@ input[type="range"]:disabled::-webkit-slider-thumb {
 .config-btn:hover {
   border-color: var(--accent);
   background: var(--bg);
+}
+
+.config-btn:focus-visible,
+.close-btn:focus-visible,
+.done-btn:focus-visible,
+.reset-btn:focus-visible,
+.config-refresh-steam-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Timeline Stats */
@@ -259,7 +273,9 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   margin-bottom: 4px;
 }
 
-.stat-label-with-tooltip:hover .stat-tooltip {
+.stat-label-with-tooltip:hover .stat-tooltip,
+.stat-label-with-tooltip:focus .stat-tooltip,
+.stat-label-with-tooltip:focus-within .stat-tooltip {
   display: block;
 }
 
@@ -360,8 +376,13 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   font-size: 1.5rem;
   cursor: pointer;
   color: var(--text);
-  padding: 0.25rem;
+  padding: 0.75rem;
   line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .close-btn:hover {
@@ -563,12 +584,20 @@ input[type="range"]:disabled::-webkit-slider-thumb {
 }
 
 /* Project click affordance */
-.project-group:hover .dev-bar {
+.project-group:hover .dev-bar,
+.project-group:focus-visible .dev-bar {
   opacity: 1;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
 }
 
-.project-group:hover .downtime-bar {
+.project-group:hover .downtime-bar,
+.project-group:focus-visible .downtime-bar {
   opacity: 0.8;
+}
+
+.project-group:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Side Panel */
@@ -894,6 +923,39 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   font-variant-numeric: tabular-nums;
 }
 
+
+/* Stat accent (primary output) */
+.stat-accent {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.stat-accent .stat-value {
+  color: var(--accent);
+}
+
+/* Chart hint */
+.chart-hint {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text);
+  opacity: 0.6;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+/* Timeline crossfade */
+.timeline-content {
+  transition: opacity 0.15s ease;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .side-panel { animation: none; }
+  .timeline-content { transition: none; }
+  .comp-refine-dot,
+  .fetch-progress::before { animation: none; opacity: 0.7; }
+}
 
 @media (max-width: 768px) {
   .slider-columns {

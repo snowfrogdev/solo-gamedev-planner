@@ -19,14 +19,14 @@ export function createInputPanel(
         <div class="slider-column-left">
           <div class="slider-group">
             <div class="slider-header">
-              <label for="minDevScope">First Game Dev Scope</label>
+              <label for="minDevScope">First Project Duration</label>
               <span class="slider-value" id="minDevScopeValue">${current.minDevScope} months</span>
             </div>
             <input type="range" id="minDevScope" min="1" max="24" step="1" value="${current.minDevScope}">
           </div>
           <div class="slider-group">
             <div class="slider-header">
-              <label for="targetDevScope">Target Dev Scope</label>
+              <label for="targetDevScope">Target Project Duration</label>
               <span class="slider-value" id="targetDevScopeValue">${current.targetDevScope} months</span>
             </div>
             <input type="range" id="targetDevScope" min="1" max="36" step="1" value="${current.targetDevScope}">
@@ -49,7 +49,7 @@ export function createInputPanel(
           </div>
         </div>
       </div>
-      <button class="config-btn" id="openConfigBtn">Advanced Settings</button>
+      <button class="config-btn" id="openConfigBtn">&#9881; Advanced Settings</button>
     </div>
   `;
 
