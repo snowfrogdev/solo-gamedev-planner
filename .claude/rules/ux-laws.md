@@ -1,5 +1,5 @@
 ---
-globs:
+paths:
   - "**/*.tsx"
   - "**/*.jsx"
   - "**/*.vue"
