@@ -85,20 +85,20 @@ export function createConfigScreen(
     <h3 class="config-section-title">Cost of Goods Sold</h3>
     <div class="config-expense-inputs">
       <div class="config-input-row">
-        <label>Platform Cut</label>
+        <label for="cfg-platform-cut">Platform Cut</label>
         <div class="config-input-field">
-          <input type="number" data-field="platformCutRate" value="${Math.round(expenses.platformCutRate * 100)}" min="0" max="100" step="1">
+          <input type="number" id="cfg-platform-cut" data-field="platformCutRate" value="${Math.round(expenses.platformCutRate * 100)}" min="0" max="100" step="1">
           <span class="input-suffix">%</span>
         </div>
       </div>
       <div class="config-input-row">
-        <label>Project Cost Formula</label>
+        <label id="cfg-cost-label">Project Cost Formula</label>
         <div class="config-input-field formula-field">
           <span class="input-prefix">$</span>
-          <input type="number" data-field="projectCostBase" value="${expenses.projectCostBase}" min="0" step="100">
+          <input type="number" data-field="projectCostBase" value="${expenses.projectCostBase}" min="0" step="100" aria-labelledby="cfg-cost-label" aria-label="Base cost">
           <span class="input-operator">+ ( months &times;</span>
           <span class="input-prefix">$</span>
-          <input type="number" data-field="projectCostPerMonth" value="${expenses.projectCostPerMonth}" min="0" step="50">
+          <input type="number" data-field="projectCostPerMonth" value="${expenses.projectCostPerMonth}" min="0" step="50" aria-labelledby="cfg-cost-label" aria-label="Cost per month">
           <span class="input-suffix">)</span>
         </div>
       </div>
@@ -106,10 +106,10 @@ export function createConfigScreen(
     <h3 class="config-section-title">Fixed Monthly Expenses</h3>
     <div class="config-expense-inputs">
       <div class="config-input-row">
-        <label>Monthly Overhead</label>
+        <label for="cfg-fixed-expenses">Monthly Overhead</label>
         <div class="config-input-field">
           <span class="input-prefix">$</span>
-          <input type="number" data-field="fixedExpenses" value="${expenses.monthlyFixedExpenses}" min="0" step="50">
+          <input type="number" id="cfg-fixed-expenses" data-field="fixedExpenses" value="${expenses.monthlyFixedExpenses}" min="0" step="50">
           <span class="input-suffix">/month</span>
         </div>
       </div>
@@ -208,6 +208,12 @@ export function createConfigScreen(
   const recoveryCP1 = g.append('circle').attr('class', 'control-handle').attr('r', 4).attr('fill', RECOVERY_COLOR).attr('stroke', 'white').attr('stroke-width', 1.5).attr('opacity', 0.7);
   const recoveryCP2 = g.append('circle').attr('class', 'control-handle').attr('r', 4).attr('fill', RECOVERY_COLOR).attr('stroke', 'white').attr('stroke-width', 1.5).attr('opacity', 0.7);
 
+  // Live value labels on endpoints
+  const supportP0Label = g.append('text').attr('font-size', '10px').attr('fill', SUPPORT_COLOR).attr('pointer-events', 'none');
+  const supportP3Label = g.append('text').attr('font-size', '10px').attr('fill', SUPPORT_COLOR).attr('pointer-events', 'none');
+  const recoveryP0Label = g.append('text').attr('font-size', '10px').attr('fill', RECOVERY_COLOR).attr('pointer-events', 'none');
+  const recoveryP3Label = g.append('text').attr('font-size', '10px').attr('fill', RECOVERY_COLOR).attr('pointer-events', 'none');
+
   function render(): void {
     const supportCurve = currentConfig.supportCurve;
     const recoveryCurve = currentConfig.recoveryCurve;
@@ -229,6 +235,17 @@ export function createConfigScreen(
     recoveryP3.attr('cx', toPixelX(recoveryCurve.p3)).attr('cy', toPixelYRecovery(recoveryCurve.p3));
     recoveryCP1.attr('cx', toPixelX(recoveryCurve.cp1)).attr('cy', toPixelYRecovery(recoveryCurve.cp1));
     recoveryCP2.attr('cx', toPixelX(recoveryCurve.cp2)).attr('cy', toPixelYRecovery(recoveryCurve.cp2));
+
+    // Live value labels on endpoints
+    const sp0Real = supportCurve.p0.y * currentConfig.supportMaxOutput;
+    const sp3Real = supportCurve.p3.y * currentConfig.supportMaxOutput;
+    supportP0Label.attr('x', toPixelX(supportCurve.p0) - 8).attr('y', toPixelYSupport(supportCurve.p0) - 10).attr('text-anchor', 'end').text(`${sp0Real.toFixed(1)}mo`);
+    supportP3Label.attr('x', toPixelX(supportCurve.p3) + 8).attr('y', toPixelYSupport(supportCurve.p3) - 10).attr('text-anchor', 'start').text(`${sp3Real.toFixed(1)}mo`);
+
+    const rp0Real = recoveryCurve.p0.y * currentConfig.recoveryMaxOutput;
+    const rp3Real = recoveryCurve.p3.y * currentConfig.recoveryMaxOutput;
+    recoveryP0Label.attr('x', toPixelX(recoveryCurve.p0) - 8).attr('y', toPixelYRecovery(recoveryCurve.p0) - 10).attr('text-anchor', 'end').text(`${rp0Real.toFixed(1)}mo`);
+    recoveryP3Label.attr('x', toPixelX(recoveryCurve.p3) + 8).attr('y', toPixelYRecovery(recoveryCurve.p3) - 10).attr('text-anchor', 'start').text(`${rp3Real.toFixed(1)}mo`);
 
     // Total = support + recovery sampled as polyline
     const supVals = sampleBezier(supportCurve, currentConfig.supportMaxOutput, TOTAL_SAMPLES);

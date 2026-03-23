@@ -253,6 +253,8 @@ function renderRevenueChart(
   const svg = d3.select(chartContainer)
     .append('svg')
     .attr('class', 'revenue-chart')
+    .attr('role', 'img')
+    .attr('aria-label', 'Revenue chart showing monthly units sold, revenue, and effective price')
     .attr('width', '100%')
     .attr('height', CHART_HEIGHT)
     .attr('viewBox', `0 0 ${width} ${CHART_HEIGHT}`);
@@ -274,6 +276,7 @@ interface SidePanelShowOptions {
   steamProvider?: () => Promise<SteamGame[]>;
   platformCutRate?: number;
   detailFetcher?: (appids: number[]) => Promise<SteamGame[]>;
+  accentColor?: string;
 }
 
 export function createSidePanel(
@@ -300,23 +303,76 @@ export function createSidePanel(
 
   const trap = createFocusTrap(panel);
   let previouslyFocused: HTMLElement | null = null;
+  let openedViaKeyboard = false;
+
+  function slideOutEnd(): void {
+    panel.classList.remove('sliding-out');
+    overlay.classList.remove('visible');
+  }
 
   function hide(): void {
     trap.deactivate();
     document.removeEventListener('keydown', onKeyDown);
-    overlay.classList.remove('visible');
-    previouslyFocused?.focus();
+
+    const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion || typeof window === 'undefined') {
+      overlay.classList.remove('visible');
+    } else {
+      panel.classList.add('sliding-out');
+      panel.addEventListener('animationend', slideOutEnd, { once: true });
+    }
+
+    if (openedViaKeyboard) previouslyFocused?.focus();
+  }
+
+  function adjustTooltipPositions(): void {
+    const panelRect = panel.getBoundingClientRect();
+    const pad = 8;
+    panel.querySelectorAll('.section-help-tooltip').forEach(el => {
+      const tip = el as HTMLElement;
+      const origDisplay = tip.style.display;
+      tip.style.display = 'block';
+
+      // Try centered
+      tip.style.left = '50%';
+      tip.style.right = 'auto';
+      tip.style.transform = 'translateX(-50%)';
+      let rect = tip.getBoundingClientRect();
+      if (rect.left >= panelRect.left + pad && rect.right <= panelRect.right - pad) {
+        tip.style.display = origDisplay;
+        return;
+      }
+
+      // Try left-aligned (extends right)
+      tip.style.left = '0';
+      tip.style.transform = 'none';
+      rect = tip.getBoundingClientRect();
+      if (rect.right <= panelRect.right - pad) {
+        tip.style.display = origDisplay;
+        return;
+      }
+
+      // Fall back to right-aligned (extends left)
+      tip.style.left = 'auto';
+      tip.style.right = '0';
+      tip.style.display = origDisplay;
+    });
   }
 
   function show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, opts?: SidePanelShowOptions): void {
+    // Cancel any in-progress slide-out: remove the class AND the listener
+    panel.removeEventListener('animationend', slideOutEnd);
+    panel.classList.remove('sliding-out');
     previouslyFocused = document.activeElement as HTMLElement | null;
+    openedViaKeyboard = previouslyFocused?.matches(':focus-visible') ?? false;
     panel.setAttribute('aria-label', `Game #${project.index + 1} Details`);
-    const { sales, steamProvider, platformCutRate, detailFetcher } = opts ?? {};
+    const { sales, steamProvider, platformCutRate, detailFetcher, accentColor } = opts ?? {};
+    const safeColor = accentColor && /^#[0-9a-fA-F]{3,8}$/.test(accentColor) ? accentColor : '';
     const cycleDuration = project.devDurationMonths + project.downtimeMonths;
     const showChart = sales && sales.monthlySales.length >= 2;
 
     panel.innerHTML = `
-      <div class="side-panel-header">
+      <div class="side-panel-header"${safeColor ? ` style="border-left:4px solid ${safeColor};padding-left:calc(1.5rem - 4px)"` : ''}>
         <h2>Game #${project.index + 1}</h2>
         <button class="close-btn" aria-label="Close">&times;</button>
       </div>
@@ -339,7 +395,7 @@ export function createSidePanel(
         </div>
 
         <div class="side-panel-section">
-          <h3>Downtime</h3>
+          <h3>Downtime <span class="section-help" tabindex="0" aria-describedby="tip-downtime">?<span class="section-help-tooltip" id="tip-downtime" role="tooltip">Time between games for bug fixes, community support, and creative recovery to prevent burnout</span></span></h3>
           <div class="side-panel-row">
             <span>Total</span>
             <span class="side-panel-value">${fmtInt(breakdown.total)} mo</span>
@@ -421,8 +477,20 @@ export function createSidePanel(
       ${sales && steamProvider ? `
       <div class="side-panel-section">
         <h3>Steam Comparison</h3>
+        <p class="section-intro">How your projected game compares to real indie titles at the same price point. The percentile shows what fraction of actual games sold fewer copies.</p>
         <div class="steam-comparison-container"></div>
       </div>
+      ` : ''}
+      ${sales ? `
+      <details class="model-assumptions">
+        <summary>How are these numbers calculated?</summary>
+        <div class="model-assumptions-body">
+          <p><strong>Pricing:</strong> Launch price scales with dev duration and snaps to standard Steam price tiers ($4.99, $7.99, $9.99, etc.).</p>
+          <p><strong>Sales:</strong> Units follow a launch spike then power-law decay (long tail). Effective price drops over time from regional pricing and sales events.</p>
+          <p><strong>Costs:</strong> Platform takes a cut (default 30%) plus fixed dev costs. Both are configurable in Advanced Settings.</p>
+          <p><strong>Steam comparison:</strong> Estimates real game sales from review counts, adjusted for genre, price, sentiment, and other factors.</p>
+        </div>
+      </details>
       ` : ''}
     `;
 
@@ -432,6 +500,7 @@ export function createSidePanel(
     overlay.classList.add('visible');
     document.addEventListener('keydown', onKeyDown);
     trap.activate();
+    adjustTooltipPositions();
 
     if (showChart) {
       const chartContainer = panel.querySelector<HTMLElement>('.revenue-chart-container');
@@ -509,7 +578,7 @@ export function createSidePanel(
       const pendingDot = `<span class="comp-refine-dot${dotHidden}"></span>`;
       return `
         <li class="comp-game">
-          <a href="${safeUrl}" target="_blank" rel="noopener">${safeName}</a>
+          <a href="${safeUrl}" target="_blank" rel="noopener" aria-label="View ${safeName} on Steam">${safeName}</a>
           <span class="comp-meta">
             <span class="comp-rating ${cls}">${sign}${r.rating.toFixed(2)}</span>
             <span class="comp-sales">~${salesStr} units sold</span>
@@ -524,12 +593,14 @@ export function createSidePanel(
         <span class="percentile-label">of indie games at that price point sold fewer copies</span>
       </div>
       <h4>Most Similar Games</h4>
+      <div class="comp-header"><span class="comp-header-game">Game</span><span class="comp-meta"><span class="comp-rating">Fit <span class="section-help" tabindex="0" aria-describedby="tip-fit">?<span class="section-help-tooltip" id="tip-fit" role="tooltip">Compares each game's actual sales to what the model predicts for your game. 0 = matched, positive (green) = outperformed, negative (red) = underperformed.</span></span></span><span class="comp-sales">Est. Sales</span><span class="comp-mult"></span></span></div>
       <ul class="comparable-games-list">${gamesList}</ul>
       ${refining && report.closest.some((r) => !r.game.details)
         ? '<p class="comp-refining"><span class="comp-refine-dot"></span> Refining estimates…</p>'
         : ''}
       <p class="comp-note">Based on ${report.totalGames} games at $${launchPrice.toFixed(2)} released in last 24 months</p>
     `;
+    adjustTooltipPositions();
   }
 
   function destroy(): void {

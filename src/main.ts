@@ -16,6 +16,7 @@ import { getComparableGames, ensureFetchStarted, forceRefresh } from './api/stea
 import { getCacheTimestamp } from './api/steamCache';
 import { ensureDetailFetchStarted, fetchDetailsForGames } from './api/steamDetailFetch';
 import { createFetchProgress } from './components/fetchProgress';
+import { createWelcomeBanner } from './components/welcomeBanner';
 import type { DowntimeBreakdown, PricingInfo, SalesTimeSeries, AccountingTimeSeries } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -23,13 +24,16 @@ app.innerHTML = `
   <header class="app-header">
     <h1>Solo Gamedev Planner</h1>
     <p>Plan your path to full-time game development</p>
+    <button class="info-btn" id="infoBtn" aria-label="About this tool">&#x2139;<span class="info-btn-tooltip">About this tool</span></button>
   </header>
+  <div id="welcome-root"></div>
   <section id="inputs"></section>
   <section id="timeline"></section>
   <div id="panel-root"></div>
   <div id="config-root"></div>
 `;
 
+const welcomeRoot = app.querySelector<HTMLElement>('#welcome-root')!;
 const inputsContainer = app.querySelector<HTMLElement>('#inputs')!;
 const timelineContainer = app.querySelector<HTMLElement>('#timeline')!;
 const panelRoot = app.querySelector<HTMLElement>('#panel-root')!;
@@ -108,9 +112,21 @@ async function openConfig(): Promise<void> {
   configScreen.show();
 }
 
+// Welcome banner
+const welcomeBanner = createWelcomeBanner(welcomeRoot);
+app.querySelector('#infoBtn')!.addEventListener('click', () => welcomeBanner.show());
+
+// Bar nudge: pulse project bars after first slider interaction
+const barNudgeKey = 'sgp-bars-nudged';
+let pendingBarNudge = false;
+
 // Input panel
 createInputPanel(inputsContainer, state.inputs, {
   onChange(inputs) {
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem(barNudgeKey)) {
+      pendingBarNudge = true;
+      localStorage.setItem(barNudgeKey, '1');
+    }
     updateState({ inputs: { ...inputs } });
   },
   onOpenConfig: openConfig,
@@ -139,7 +155,8 @@ let salesMap = new Map<number, SalesTimeSeries>();
 let accounting: AccountingTimeSeries = { entries: [], revenueByProject: [] };
 
 // Timeline
-const timeline = createTimeline(timelineContainer, (project) => {
+const timeline = createTimeline(timelineContainer, (project, color) => {
+  if (typeof localStorage !== 'undefined') localStorage.setItem(barNudgeKey, '1');
   const breakdown = breakdowns.get(project.index);
   const pricing = pricingMap.get(project.index);
   const sales = salesMap.get(project.index);
@@ -149,6 +166,7 @@ const timeline = createTimeline(timelineContainer, (project) => {
       steamProvider: () => getComparableGames(),
       platformCutRate: state.inputs.platformCutRate,
       detailFetcher: (appids) => fetchDetailsForGames(appids),
+      accentColor: color,
     });
   }
 });
@@ -200,6 +218,11 @@ function regenerate(): void {
 
   timeline.update(plan, state.inputs, accounting, annualizedNetProfit);
   sidePanel.hide();
+
+  if (pendingBarNudge) {
+    pendingBarNudge = false;
+    requestAnimationFrame(() => timeline.nudgeBars());
+  }
 }
 
 subscribe(regenerate);

@@ -31,6 +31,7 @@ function renderStats(
   plan: GeneratedPlan,
   annualizedNetProfit: number,
   targetDevScope: number,
+  targetIncome: number,
 ): void {
   const statsEl = document.createElement('div');
   statsEl.className = 'timeline-stats';
@@ -39,13 +40,25 @@ function renderStats(
   const trailingMonths = Math.max(12, targetDevScope);
 
   statsEl.innerHTML = `
-    <div class="stat"><span class="stat-value">${plan.projects.length}</span><span class="stat-label">Games</span></div>
-    <div class="stat"><span class="stat-value">${plan.totalMonths.toFixed(1)}</span><span class="stat-label">Total Months</span></div>
-    <div class="stat"><span class="stat-value">${avgDev.toFixed(1)}mo</span><span class="stat-label">Avg Dev Time</span></div>
-    <div class="stat"><span class="stat-value">${avgDown.toFixed(1)}mo</span><span class="stat-label">Avg Downtime</span></div>
-    <div class="stat stat-accent"><span class="stat-value">$${Math.round(annualizedNetProfit).toLocaleString()}</span><span class="stat-label stat-label-with-tooltip" tabindex="0">Avg. Annual Net Profit<span class="stat-tooltip">Net profit averaged over the final ${trailingMonths} months of the plan, annualized to 12 months</span></span></div>
+    <div class="stat"><span class="stat-value">${plan.projects.length}</span><span class="stat-label stat-label-with-tooltip" tabindex="0" aria-describedby="tip-games">Games<span class="stat-tooltip" id="tip-games" role="tooltip">Total game projects in your plan</span></span></div>
+    <div class="stat"><span class="stat-value">${plan.totalMonths.toFixed(1)}</span><span class="stat-label stat-label-with-tooltip" tabindex="0" aria-describedby="tip-duration">Plan Duration<span class="stat-tooltip" id="tip-duration" role="tooltip">Full plan duration including downtime between projects</span></span></div>
+    <div class="stat"><span class="stat-value">${avgDev.toFixed(1)}mo</span><span class="stat-label stat-label-with-tooltip" tabindex="0" aria-describedby="tip-avg-dev">Avg Dev Time<span class="stat-tooltip" id="tip-avg-dev" role="tooltip">Average development time per project</span></span></div>
+    <div class="stat"><span class="stat-value">${avgDown.toFixed(1)}mo</span><span class="stat-label stat-label-with-tooltip" tabindex="0" aria-describedby="tip-avg-down">Avg Downtime<span class="stat-tooltip" id="tip-avg-down" role="tooltip">Average rest + support time between projects (bug fixes, patches, and creative recovery)</span></span></div>
+    <div class="stat stat-accent"><span class="stat-value">$${Math.round(annualizedNetProfit).toLocaleString()}</span><span class="stat-label stat-label-with-tooltip" tabindex="0" aria-describedby="tip-annual-profit">Annual Net Profit<span class="stat-tooltip" id="tip-annual-profit" role="tooltip">Net profit averaged over the final ${trailingMonths} months of the plan, annualized to 12 months</span></span></div>
   `;
+
+  if (annualizedNetProfit >= targetIncome) {
+    statsEl.querySelector('.stat-accent')?.classList.add('stat-goal-met');
+  }
+
   container.appendChild(statsEl);
+
+  if (annualizedNetProfit <= 0) {
+    const note = document.createElement('p');
+    note.className = 'profit-note';
+    note.textContent = 'Net profit may be negative early on \u2014 revenue grows as your projects scale up over the plan.';
+    container.appendChild(note);
+  }
 }
 
 // --- Revenue area (stacked area + income line + target line) ---
@@ -156,7 +169,8 @@ function drawProjectBars(
   plan: GeneratedPlan,
   xScale: d3.ScaleLinear<number, number>,
   barY: number,
-  onProjectClick?: (project: PlannedProject) => void,
+  colorScale: d3.ScaleOrdinal<string, string>,
+  onProjectClick?: (project: PlannedProject, color?: string) => void,
 ): void {
   const projects = svg.selectAll('.project-group')
     .data(plan.projects)
@@ -172,11 +186,17 @@ function drawProjectBars(
       .attr('tabindex', '0')
       .attr('role', 'button')
       .style('cursor', 'pointer')
-      .on('click', (_event: MouseEvent, d: PlannedProject) => onProjectClick(d))
+      .on('click', (_event: MouseEvent, d: PlannedProject) => {
+        svg.selectAll('.project-group').classed('project-selected', false);
+        d3.select((_event.currentTarget as Element).closest('.project-group')!).classed('project-selected', true);
+        onProjectClick(d, colorScale(String(d.index)));
+      })
       .on('keydown', (event: KeyboardEvent, d: PlannedProject) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          onProjectClick(d);
+          svg.selectAll('.project-group').classed('project-selected', false);
+          d3.select(event.currentTarget as Element).classed('project-selected', true);
+          onProjectClick(d, colorScale(String(d.index)));
         }
       });
   }
@@ -311,14 +331,18 @@ function addTimelineTooltip(
 
 export function createTimeline(
   container: HTMLElement,
-  onProjectClick?: (project: PlannedProject) => void,
-): { update(plan: GeneratedPlan, inputs: PlannerInputs, accounting?: AccountingTimeSeries, annualizedNetProfit?: number): void } {
+  onProjectClick?: (project: PlannedProject, color?: string) => void,
+): { update(plan: GeneratedPlan, inputs: PlannerInputs, accounting?: AccountingTimeSeries, annualizedNetProfit?: number): void; nudgeBars(): void } {
 
   function update(plan: GeneratedPlan, inputs: PlannerInputs, accounting?: AccountingTimeSeries, annualizedNetProfit?: number): void {
-    container.innerHTML = '';
+    // Preserve height to prevent scroll jump during re-render
+    container.style.minHeight = `${container.offsetHeight}px`;
+    const oldContent = container.querySelector('.timeline-content') as HTMLElement | null;
+    if (oldContent) oldContent.style.opacity = '0.4';
 
     if (plan.projects.length === 0) {
       container.innerHTML = '<p class="no-data">No projects fit in this timeline.</p>';
+      container.style.minHeight = '';
       return;
     }
 
@@ -327,12 +351,24 @@ export function createTimeline(
     wrapper.style.opacity = '0';
     container.appendChild(wrapper);
 
-    renderStats(wrapper, plan, annualizedNetProfit ?? 0, inputs.targetDevScope);
+    renderStats(wrapper, plan, annualizedNetProfit ?? 0, inputs.targetDevScope, inputs.targetIncome);
 
     // Chart wrapper (for tooltip positioning)
     const chartWrapper = document.createElement('div');
     chartWrapper.style.position = 'relative';
     wrapper.appendChild(chartWrapper);
+
+    // Chart legend
+    const legend = document.createElement('div');
+    legend.className = 'timeline-legend';
+    legend.innerHTML = `
+      <span class="timeline-legend-item"><span class="timeline-legend-swatch" style="background:var(--dev-bar)"></span> Development</span>
+      <span class="timeline-legend-item"><span class="timeline-legend-swatch" style="background:var(--downtime-bar)"></span> Downtime</span>
+      <span class="timeline-legend-item"><span class="timeline-legend-line" style="background:#70ad47"></span> Net profit</span>
+      <span class="timeline-legend-item"><span class="timeline-legend-line timeline-legend-dashed" style="border-color:#ed7d31"></span> Income target</span>
+      <span class="timeline-legend-item"><span class="timeline-legend-line timeline-legend-dashed" style="border-color:var(--horizon-line)"></span> Time horizon</span>
+    `;
+    chartWrapper.appendChild(legend);
 
     const width = container.clientWidth || 800;
     const barBandTop = CHART_HEIGHT - MARGIN.bottom - BAR_BAND_HEIGHT;
@@ -370,18 +406,20 @@ export function createTimeline(
       .attr('class', 'horizon-line');
 
     const barY = barBandTop + (BAR_BAND_HEIGHT - BAR_HEIGHT) / 2;
-    drawProjectBars(svg, plan, xScale, barY, onProjectClick);
+    drawProjectBars(svg, plan, xScale, barY, colorScale, onProjectClick);
     addTimelineTooltip(svg, chartWrapper, plan, accounting, xScale, yScale, colorScale, xMax, width);
 
     // Onboarding hint
     if (onProjectClick) {
       const hint = document.createElement('p');
       hint.className = 'chart-hint';
-      hint.textContent = 'Click a project bar to see detailed projections';
+      hint.innerHTML = 'Bars show your game projects growing in scope. Colored areas show each game\u2019s revenue over time. <strong>Click a project bar</strong> for detailed financials and Steam comparisons.';
       wrapper.appendChild(hint);
     }
 
-    // Fade in
+    // Release height lock, remove old content, and fade in
+    oldContent?.remove();
+    container.style.minHeight = '';
     if (typeof requestAnimationFrame !== 'undefined') {
       requestAnimationFrame(() => { wrapper.style.opacity = '1'; });
     } else {
@@ -389,5 +427,11 @@ export function createTimeline(
     }
   }
 
-  return { update };
+  function nudgeBars(): void {
+    container.querySelectorAll('.project-group').forEach(g => {
+      g.classList.add('project-bar-nudge');
+    });
+  }
+
+  return { update, nudgeBars };
 }

@@ -22,6 +22,7 @@ export function createInputPanel(
               <label for="minDevScope">First Project Duration</label>
               <span class="slider-value" id="minDevScopeValue">${current.minDevScope} months</span>
             </div>
+            <p class="slider-description">How long your first game takes to make</p>
             <input type="range" id="minDevScope" min="1" max="24" step="1" value="${current.minDevScope}">
           </div>
           <div class="slider-group">
@@ -29,6 +30,7 @@ export function createInputPanel(
               <label for="targetDevScope">Target Project Duration</label>
               <span class="slider-value" id="targetDevScopeValue">${current.targetDevScope} months</span>
             </div>
+            <p class="slider-description">The game scope you're working toward</p>
             <input type="range" id="targetDevScope" min="1" max="36" step="1" value="${current.targetDevScope}">
           </div>
         </div>
@@ -38,6 +40,7 @@ export function createInputPanel(
               <label for="timeHorizon">Time Horizon</label>
               <span class="slider-value" id="timeHorizonValue">${current.timeHorizonMonths} months</span>
             </div>
+            <p class="slider-description">Your planning window for reaching your income goal</p>
             <input type="range" id="timeHorizon" min="6" max="120" step="1" value="${current.timeHorizonMonths}">
           </div>
           <div class="slider-group">
@@ -45,11 +48,12 @@ export function createInputPanel(
               <label for="targetIncome">Target Pre-Tax Income</label>
               <span class="slider-value" id="targetIncomeValue">$${current.targetIncome.toLocaleString()} /year</span>
             </div>
+            <p class="slider-description">Annual earnings goal from game sales</p>
             <input type="range" id="targetIncome" min="1000" max="500000" step="1000" value="${current.targetIncome}">
           </div>
         </div>
       </div>
-      <button class="config-btn" id="openConfigBtn">&#9881; Advanced Settings</button>
+      <button class="config-btn" id="openConfigBtn" aria-haspopup="dialog">&#9881; Advanced Settings &mdash; costs, downtime curves</button>
     </div>
   `;
 
@@ -113,6 +117,57 @@ export function createInputPanel(
   }
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function makeEditableValue(
+    valueEl: HTMLElement,
+    rangeInput: HTMLInputElement,
+    format: (val: number) => string,
+  ): void {
+
+    valueEl.addEventListener('click', () => {
+      if (valueEl.querySelector('input')) return;
+      const currentVal = parseFloat(rangeInput.value);
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.className = 'slider-value-input';
+      input.value = String(currentVal);
+      input.min = rangeInput.min;
+      input.max = rangeInput.max;
+      input.step = rangeInput.step;
+
+      valueEl.textContent = '';
+      valueEl.appendChild(input);
+      input.focus();
+      input.select();
+
+      let cancelled = false;
+
+      function commit(): void {
+        if (cancelled) return;
+        let val = parseFloat(input.value);
+        if (isNaN(val)) val = currentVal;
+        val = Math.max(parseFloat(rangeInput.min), Math.min(parseFloat(rangeInput.max), val));
+        rangeInput.value = String(val);
+        valueEl.textContent = format(val);
+        emitChange();
+      }
+
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') {
+          cancelled = true;
+          input.removeEventListener('blur', commit);
+          valueEl.textContent = format(currentVal);
+        }
+      });
+    });
+  }
+
+  makeEditableValue(minDevValueEl, minDevInput, (v) => `${v} months`);
+  makeEditableValue(targetDevValueEl, targetDevInput, (v) => `${v} months`);
+  makeEditableValue(timeHorizonValueEl, timeHorizonInput, (v) => `${v} months`);
+  makeEditableValue(targetIncomeValueEl, targetIncomeInput, (v) => `$${v.toLocaleString()} /year`);
 
   syncConstraints();
   timeHorizonInput.addEventListener('input', emitChange);
