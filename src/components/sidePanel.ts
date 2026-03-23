@@ -3,10 +3,28 @@ import type { PlannedProject, DowntimeBreakdown, PricingInfo, SalesTimeSeries, S
 import { fmtCompact } from '../utils/format';
 import { buildComparisonReport, filterByPriceTier } from '../engine/steamComparison';
 import { DEFAULT_PLATFORM_CUT_RATE, computeProjectFinancials } from '../engine/expenses';
-import type { SteamComparisonReport } from '../engine/steamComparison';
+import type { SteamComparisonReport, SalesBreakdown } from '../engine/steamComparison';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatBreakdownTooltip(b: SalesBreakdown): string {
+  const lines: string[] = [`Multiplier: ${b.multiplier.toFixed(1)}×`];
+  const factors: Array<{ name: string; detail: { raw: number; dampened: number }; label?: string }> = [
+    { name: 'Volume', detail: b.volume },
+    { name: 'Price', detail: b.price },
+    { name: 'Sentiment', detail: b.sentiment },
+    { name: 'Chinese', detail: b.cjkAudience },
+    { name: 'Genre', detail: b.genre, label: b.genre.label },
+    { name: 'EA', detail: b.earlyAccess },
+  ];
+  for (const f of factors) {
+    if (f.detail.raw === 1.0) continue;
+    const label = f.label ? ` (${f.label})` : '';
+    lines.push(`${f.name}: ${f.detail.dampened.toFixed(2)}×${label}`);
+  }
+  return lines.join('\n');
 }
 
 function fmtMonths(n: number): string {
@@ -254,6 +272,7 @@ interface SidePanelShowOptions {
   sales?: SalesTimeSeries;
   steamProvider?: () => Promise<SteamGame[]>;
   platformCutRate?: number;
+  detailFetcher?: (appids: number[]) => Promise<SteamGame[]>;
 }
 
 export function createSidePanel(
@@ -282,7 +301,7 @@ export function createSidePanel(
   }
 
   function show(project: PlannedProject, breakdown: DowntimeBreakdown, pricing: PricingInfo, opts?: SidePanelShowOptions): void {
-    const { sales, steamProvider, platformCutRate } = opts ?? {};
+    const { sales, steamProvider, platformCutRate, detailFetcher } = opts ?? {};
     const cycleDuration = project.devDurationMonths + project.downtimeMonths;
     const showChart = sales && sales.monthlySales.length >= 2;
 
@@ -392,9 +411,7 @@ export function createSidePanel(
       ${sales && steamProvider ? `
       <div class="side-panel-section">
         <h3>Steam Comparison</h3>
-        <div class="steam-comparison-container">
-          <button class="compare-btn">Compare with Steam Games</button>
-        </div>
+        <div class="steam-comparison-container"></div>
       </div>
       ` : ''}
     `;
@@ -412,22 +429,46 @@ export function createSidePanel(
     }
 
     if (sales && steamProvider) {
-      const compareBtn = panel.querySelector<HTMLButtonElement>('.compare-btn');
       const compContainer = panel.querySelector<HTMLElement>('.steam-comparison-container');
-      if (compareBtn && compContainer) {
-        compareBtn.addEventListener('click', async () => {
-          compareBtn.disabled = true;
-          compareBtn.textContent = 'Comparing...';
+      if (compContainer) {
+        (async () => {
           try {
             const priceCents = Math.round(pricing.launchPrice * 100);
             const allGames = await steamProvider();
             const priceMatched = filterByPriceTier(allGames, priceCents);
-            const report = buildComparisonReport(priceMatched, sales.m1Units, sales.tailStrength);
-            renderComparisonReport(compContainer, report, pricing.launchPrice);
+
+            let report = buildComparisonReport(priceMatched, sales.m1Units, sales.tailStrength);
+            const hasDetailFetcher = !!detailFetcher;
+            renderComparisonReport(compContainer, report, pricing.launchPrice, hasDetailFetcher);
+
+            // Progressive refinement — fetch details for top-10 games missing them
+            if (detailFetcher) {
+              while (overlay.classList.contains('visible')) {
+                const needDetails = report.closest
+                  .filter((r) => !r.game.details)
+                  .map((r) => r.game.appid);
+
+                if (needDetails.length === 0) break;
+
+                const fetched = await detailFetcher(needDetails);
+
+                if (!overlay.classList.contains('visible')) break;
+
+                const fetchedMap = new Map(fetched.map((g) => [g.appid, g]));
+                for (const game of priceMatched) {
+                  const updated = fetchedMap.get(game.appid);
+                  if (updated?.details) game.details = updated.details;
+                }
+
+                report = buildComparisonReport(priceMatched, sales.m1Units, sales.tailStrength);
+                const stillRefining = report.closest.some((r) => !r.game.details);
+                renderComparisonReport(compContainer, report, pricing.launchPrice, stillRefining);
+              }
+            }
           } catch {
             compContainer.innerHTML = '<p class="compare-error">Failed to load Steam comparison data.</p>';
           }
-        });
+        })();
       }
     }
   }
@@ -436,6 +477,7 @@ export function createSidePanel(
     container: HTMLElement,
     report: SteamComparisonReport,
     launchPrice: number,
+    refining = false,
   ): void {
     if (report.totalGames === 0) {
       container.innerHTML = '<p class="compare-empty">No comparable games found at this price tier.</p>';
@@ -448,12 +490,18 @@ export function createSidePanel(
       const cls = r.rating >= 0 ? 'positive' : 'negative';
       const safeName = escapeHtml(r.game.name);
       const safeUrl = r.game.storeUrl.startsWith('https://store.steampowered.com/') ? r.game.storeUrl : '#';
+      const salesStr = Math.round(r.estimatedSales).toLocaleString();
+      const multStr = r.breakdown.multiplier.toFixed(1);
+      const tooltip = formatBreakdownTooltip(r.breakdown);
+      const dotHidden = (!refining || r.game.details) ? ' hidden' : '';
+      const pendingDot = `<span class="comp-refine-dot${dotHidden}"></span>`;
       return `
         <li class="comp-game">
           <a href="${safeUrl}" target="_blank" rel="noopener">${safeName}</a>
           <span class="comp-meta">
             <span class="comp-rating ${cls}">${sign}${r.rating.toFixed(2)}</span>
-            <span class="comp-sales">~${r.game.estimatedSales.toLocaleString()} sales</span>
+            <span class="comp-sales">~${salesStr} units sold</span>
+            <span class="comp-mult" title="${escapeHtml(tooltip)}">${multStr}×</span>${pendingDot}
           </span>
         </li>`;
     }).join('');
@@ -465,6 +513,9 @@ export function createSidePanel(
       </div>
       <h4>Most Similar Games</h4>
       <ul class="comparable-games-list">${gamesList}</ul>
+      ${refining && report.closest.some((r) => !r.game.details)
+        ? '<p class="comp-refining"><span class="comp-refine-dot"></span> Refining estimates…</p>'
+        : ''}
       <p class="comp-note">Based on ${report.totalGames} games at $${launchPrice.toFixed(2)} released in last 24 months</p>
     `;
   }

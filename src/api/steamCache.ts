@@ -1,11 +1,11 @@
 import type { SteamGame } from '../types';
 
 const DB_NAME = 'solo-gamedev-planner';
-/** Bump version to clear + rebuild the cache (data is rebuildable, not user data).
- *  onupgradeneeded recreates stores from scratch — no migration needed. */
-const DB_VERSION = 1;
+/** Bump version when stores change. onupgradeneeded creates missing stores. */
+const DB_VERSION = 2;
 const GAMES_STORE = 'steam-games';
 const META_STORE = 'steam-meta';
+const DETAILS_META_STORE = 'steam-details-meta';
 const CACHE_MAX_AGE_DAYS = 30;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -24,6 +24,9 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(META_STORE)) {
         db.createObjectStore(META_STORE);
+      }
+      if (!db.objectStoreNames.contains(DETAILS_META_STORE)) {
+        db.createObjectStore(DETAILS_META_STORE);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -115,8 +118,72 @@ export async function markFetchComplete(): Promise<void> {
 /** Clear all cached data */
 export async function clearCache(): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction([GAMES_STORE, META_STORE], 'readwrite');
+  const tx = db.transaction([GAMES_STORE, META_STORE, DETAILS_META_STORE], 'readwrite');
   tx.objectStore(GAMES_STORE).clear();
   tx.objectStore(META_STORE).clear();
+  tx.objectStore(DETAILS_META_STORE).clear();
   await txComplete(tx);
+}
+
+// --- Detail fetch persistence ---
+
+/** Save a single game with updated details back to the store */
+export async function saveGameWithDetails(game: SteamGame): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(GAMES_STORE, 'readwrite');
+  tx.objectStore(GAMES_STORE).put(game);
+  await txComplete(tx);
+}
+
+/** Get detail-fetch progress checkpoint */
+export async function getDetailFetchProgress(): Promise<{ totalProcessed: number } | null> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction(DETAILS_META_STORE, 'readonly');
+    const store = tx.objectStore(DETAILS_META_STORE);
+    const totalProcessed = await txPromise(store.get('totalProcessed'));
+    if (totalProcessed == null) return null;
+    return { totalProcessed };
+  } catch {
+    return null;
+  }
+}
+
+/** Save detail-fetch progress checkpoint */
+export async function saveDetailFetchProgress(totalProcessed: number): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(DETAILS_META_STORE, 'readwrite');
+  tx.objectStore(DETAILS_META_STORE).put(totalProcessed, 'totalProcessed');
+  await txComplete(tx);
+}
+
+/** Mark detail fetch as complete */
+export async function markDetailFetchComplete(): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(DETAILS_META_STORE, 'readwrite');
+  const store = tx.objectStore(DETAILS_META_STORE);
+  store.put('complete', 'detailFetchStatus');
+  store.put(Date.now(), 'detailFetchTimestamp');
+  await txComplete(tx);
+}
+
+/** Check if detail fetch is complete */
+export async function isDetailFetchComplete(): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction(DETAILS_META_STORE, 'readonly');
+    const status = await txPromise(tx.objectStore(DETAILS_META_STORE).get('detailFetchStatus'));
+    return status === 'complete';
+  } catch {
+    return false;
+  }
+}
+
+/** Get all cached games without details, sorted by price ascending */
+export async function getGamesWithoutDetails(): Promise<SteamGame[]> {
+  const all = await getCache();
+  if (!all) return [];
+  const without = all.filter((g) => !g.details);
+  without.sort((a, b) => a.priceInCents - b.priceInCents);
+  return without;
 }

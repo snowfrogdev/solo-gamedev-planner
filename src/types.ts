@@ -96,7 +96,14 @@ export interface AccountingTimeSeries {
   revenueByProject: number[][];  // [projectIndex][calendarMonth]
 }
 
-/** A Steam game with estimated sales data, used for market comparison */
+/** Detailed data fetched from Steam's appdetails API (second-phase enrichment) */
+export interface SteamGameDetails {
+  genres: string[];        // e.g. ["Action", "Indie"]
+  isEarlyAccess: boolean;
+  fetchedAt: number;       // Date.now() when fetched
+}
+
+/** A Steam game with review and pricing data, used for market comparison */
 export interface SteamGame {
   appid: number;
   name: string;
@@ -105,6 +112,22 @@ export interface SteamGame {
   priceInCents: number;         // original (non-discounted) price
   releaseDate: Date;
   monthsSinceRelease: number;
-  estimatedSales: number;       // derived from totalReviews × review-to-sales multiplier
   storeUrl: string;
+  details?: SteamGameDetails;   // populated by background detail fetch
+}
+
+/** Progress report from the Steam search fetch (phase 1) */
+export interface FetchProgress {
+  page: number;
+  gamesFound: number;
+  status: string;
+  oldestReleaseDate?: Date;   // oldest game on this page (for progress calculation)
+}
+
+/** Progress report from the Steam detail fetch (phase 2) */
+export interface DetailFetchProgress {
+  processed: number;
+  total: number;
+  currentGame: string;
+  status: string;
 }

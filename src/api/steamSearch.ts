@@ -7,8 +7,7 @@
 
 import { createRateLimitedFetcher } from './rateLimiter';
 import { getCache, isCacheFresh, savePage, markFetchStarted, markFetchComplete } from './steamCache';
-import { estimateSalesFromReviews } from '../engine/steamComparison';
-import type { SteamGame } from '../types';
+import type { SteamGame, FetchProgress } from '../types';
 
 const RESULTS_PER_PAGE = 100;
 const MIN_AGE_DAYS = 30;
@@ -64,12 +63,13 @@ function parseOriginalPriceCents(row: Element): number {
   return priceAttr ? parseInt(priceAttr, 10) : 0;
 }
 
-function parseSearchResults(html: string, now: Date): { games: SteamGame[]; reachedCutoff: boolean } {
+function parseSearchResults(html: string, now: Date): { games: SteamGame[]; reachedCutoff: boolean; oldestDateSeen: Date | null } {
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
   const rows = doc.querySelectorAll('a[data-ds-appid]');
   const games: SteamGame[] = [];
   let reachedCutoff = false;
+  let oldestDateSeen: Date | null = null;
 
   for (const row of rows) {
     const appid = parseInt(row.getAttribute('data-ds-appid') ?? '', 10);
@@ -81,6 +81,9 @@ function parseSearchResults(html: string, now: Date): { games: SteamGame[]; reac
     const releaseDateText = row.querySelector('.search_released')?.textContent ?? '';
     const releaseDate = parseReleaseDate(releaseDateText);
     if (!releaseDate) continue;
+
+    // Track oldest date seen on this page (even for skipped rows) for progress reporting
+    if (!oldestDateSeen || releaseDate < oldestDateSeen) oldestDateSeen = releaseDate;
 
     const monthsSinceRelease = monthsBetween(releaseDate, now);
 
@@ -106,19 +109,15 @@ function parseSearchResults(html: string, now: Date): { games: SteamGame[]; reac
       priceInCents: originalPriceCents,
       releaseDate,
       monthsSinceRelease,
-      estimatedSales: reviewData ? estimateSalesFromReviews(reviewData.totalReviews) : 0,
       storeUrl: href,
     });
   }
 
-  return { games, reachedCutoff };
+  return { games, reachedCutoff, oldestDateSeen };
 }
 
-export interface FetchProgress {
-  page: number;
-  gamesFound: number;
-  status: string;
-}
+// FetchProgress is defined in types.ts to avoid layer violations (components import it)
+export type { FetchProgress } from '../types';
 
 /**
  * Start background fetch of all indie Steam games from the last 24 months.
@@ -155,20 +154,26 @@ export async function startBackgroundFetch(
       const start = page * RESULTS_PER_PAGE;
       const url = buildSearchUrl(start);
 
-      onProgress?.({ page: page + 1, gamesFound: totalGamesFound, status: `Fetching page ${page + 1}...` });
-
       const response = await rateLimitedFetch(url);
       const data = await response.json();
 
       if (!data.results_html) break;
 
-      const { games, reachedCutoff } = parseSearchResults(data.results_html, now);
+      const { games, reachedCutoff, oldestDateSeen } = parseSearchResults(data.results_html, now);
 
       // Save this page immediately to IndexedDB
       if (games.length > 0) {
         await savePage(games);
         totalGamesFound += games.length;
       }
+
+      // Always report progress — even when all games on page were too recent to keep
+      onProgress?.({
+        page: page + 1,
+        gamesFound: totalGamesFound,
+        status: `Fetching page ${page + 1}...`,
+        oldestReleaseDate: oldestDateSeen ?? undefined,
+      });
 
       if (reachedCutoff) break;
 

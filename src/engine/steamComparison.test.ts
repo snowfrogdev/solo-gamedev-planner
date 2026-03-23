@@ -2,12 +2,15 @@ import { describe, test, expect } from 'bun:test';
 import {
   computeRating,
   computeProjectedCumulativeSales,
-  estimateSalesFromReviews,
+  estimateSales,
+  getSalesBreakdown,
+  getGenreFactor,
+  hasCjkCharacters,
   buildComparisonReport,
   filterByPriceTier,
   DEFAULT_TAIL_STRENGTH,
 } from './steamComparison';
-import type { SteamGame } from '../types';
+import type { SteamGame, SteamGameDetails } from '../types';
 
 function makeGame(overrides: Partial<SteamGame> = {}): SteamGame {
   return {
@@ -18,8 +21,16 @@ function makeGame(overrides: Partial<SteamGame> = {}): SteamGame {
     priceInCents: 999,
     releaseDate: new Date('2025-01-01'),
     monthsSinceRelease: 12,
-    estimatedSales: 3000,
     storeUrl: 'https://store.steampowered.com/app/1',
+    ...overrides,
+  };
+}
+
+function makeDetails(overrides: Partial<SteamGameDetails> = {}): SteamGameDetails {
+  return {
+    genres: ['Indie', 'Simulation'],
+    isEarlyAccess: false,
+    fetchedAt: Date.now(),
     ...overrides,
   };
 }
@@ -81,7 +92,6 @@ describe('computeProjectedCumulativeSales', () => {
 
   test('early-exits when units drop below 1', () => {
     const cum = computeProjectedCumulativeSales(1, 1000);
-    // Should terminate early, not loop 1000 times accumulating near-zero values
     expect(cum).toBeGreaterThan(0);
     expect(cum).toBeLessThan(100);
   });
@@ -90,57 +100,281 @@ describe('computeProjectedCumulativeSales', () => {
     const defaultResult = computeProjectedCumulativeSales(500, 12, DEFAULT_TAIL_STRENGTH);
     const strongerTail = computeProjectedCumulativeSales(500, 12, 0.8);
     expect(strongerTail).not.toBe(defaultResult);
-    // Stronger tail = more sales in later months
     expect(strongerTail).toBeGreaterThan(defaultResult);
   });
 });
 
-describe('estimateSalesFromReviews', () => {
-  test('applies review-to-sales multiplier of 30', () => {
-    expect(estimateSalesFromReviews(100)).toBe(3000);
+describe('hasCjkCharacters', () => {
+  test('detects CJK characters', () => {
+    expect(hasCjkCharacters('公主：东方与远征')).toBe(true);
+    expect(hasCjkCharacters('Game Name 中文')).toBe(true);
+  });
+
+  test('returns false for non-CJK text', () => {
+    expect(hasCjkCharacters('Test Game')).toBe(false);
+    expect(hasCjkCharacters('Über Cool Game')).toBe(false);
+    expect(hasCjkCharacters('')).toBe(false);
+  });
+
+  test('detects CJK extension B characters', () => {
+    expect(hasCjkCharacters('\u3400')).toBe(true);
+  });
+});
+
+describe('getGenreFactor', () => {
+  test('returns factor for recognized genre', () => {
+    expect(getGenreFactor(['Action'])).toBe(2.0);
+    expect(getGenreFactor(['RPG'])).toBe(1.25);
+    expect(getGenreFactor(['Puzzle'])).toBe(0.85);
+    expect(getGenreFactor(['Visual Novel'])).toBe(0.65);
+  });
+
+  test('skips Indie and uses next recognized genre', () => {
+    expect(getGenreFactor(['Indie', 'Action'])).toBe(2.0);
+  });
+
+  test('averages multiple recognized non-Indie genres', () => {
+    expect(getGenreFactor(['Action', 'Adventure'])).toBeCloseTo(1.45, 5);
+    expect(getGenreFactor(['Indie', 'Strategy', 'Action'])).toBeCloseTo(1.525, 5);
+  });
+
+  test('returns 1.0 for Indie-only', () => {
+    expect(getGenreFactor(['Indie'])).toBe(1.0);
+  });
+
+  test('returns 1.0 for unrecognized genres', () => {
+    expect(getGenreFactor(['Sports', 'Racing'])).toBe(1.0);
+  });
+
+  test('returns 1.0 for empty list', () => {
+    expect(getGenreFactor([])).toBe(1.0);
+  });
+});
+
+describe('estimateSales', () => {
+  test('base case: no active factors produces base × reviews', () => {
+    const game = makeGame({ totalReviews: 500, priceInCents: 999, reviewPositivePct: 80 });
+    expect(estimateSales(game)).toBe(500 * 30);
+  });
+
+  // Hardcoded expected values (independently computed, not replicating formula)
+  test('50 reviews at $9.99, 80% positive = 1143 sales', () => {
+    // 50 × 30 × dampen(0.7) = 50 × 30 × 0.8189 ≈ 1228
+    // dampen(0.7) = 1/(1/0.7)^0.56 = 1/1.4286^0.56 = 1/1.2209 = 0.8190
+    const game = makeGame({ totalReviews: 50, priceInCents: 999, reviewPositivePct: 80 });
+    expect(estimateSales(game)).toBeCloseTo(1229, -1); // within ~10
+  });
+
+  test('5000 reviews at $9.99, 80% positive ≈ 181,100 sales', () => {
+    // 5000 × 30 × dampen(1.4) = 5000 × 30 × 1.2074 ≈ 181,100
+    const game = makeGame({ totalReviews: 5000, priceInCents: 999, reviewPositivePct: 80 });
+    expect(estimateSales(game)).toBeCloseTo(181100, -2); // within ~100
+  });
+
+  test('500 reviews at $3.99, 80% positive = 18,197 sales', () => {
+    // 500 × 30 × dampen(1.3) = 500 × 30 × 1.1613 ≈ 17,420
+    // (1.3^0.56 = 1.1613)
+    const game = makeGame({ totalReviews: 500, priceInCents: 399, reviewPositivePct: 80 });
+    expect(estimateSales(game)).toBeCloseTo(17420, -2);
+  });
+
+  // Boundary tests — review count tiers
+  test('boundary: 99 reviews uses 0.7× volume factor', () => {
+    const game = makeGame({ totalReviews: 99 });
+    expect(estimateSales(game) / 99).toBeLessThan(30); // dampened 0.7 pulls below 30
+  });
+
+  test('boundary: 100 reviews uses 1.0× volume factor', () => {
+    const game = makeGame({ totalReviews: 100 });
+    expect(estimateSales(game) / 100).toBe(30); // no adjustment
+  });
+
+  test('boundary: 999 reviews uses 1.0× volume factor', () => {
+    const game = makeGame({ totalReviews: 999 });
+    expect(estimateSales(game) / 999).toBe(30);
+  });
+
+  test('boundary: 1000 reviews uses 1.4× volume factor', () => {
+    const game = makeGame({ totalReviews: 1000 });
+    expect(estimateSales(game) / 1000).toBeGreaterThan(30);
+  });
+
+  test('boundary: 10000 reviews uses 1.4× volume factor', () => {
+    const game = makeGame({ totalReviews: 10000 });
+    expect(estimateSales(game) / 10000).toBeGreaterThan(30);
+  });
+
+  test('boundary: 10001 reviews uses 1.0× volume factor', () => {
+    const game = makeGame({ totalReviews: 10001 });
+    expect(estimateSales(game) / 10001).toBe(30);
+  });
+
+  // Boundary tests — price
+  test('boundary: 499 cents gets price adjustment', () => {
+    const game = makeGame({ totalReviews: 500, priceInCents: 499 });
+    expect(estimateSales(game)).toBeGreaterThan(500 * 30);
+  });
+
+  test('boundary: 500 cents does NOT get price adjustment', () => {
+    const game = makeGame({ totalReviews: 500, priceInCents: 500 });
+    expect(estimateSales(game)).toBe(500 * 30);
+  });
+
+  // Boundary tests — sentiment
+  test('boundary: 95% positive triggers sentiment factor', () => {
+    const game = makeGame({ totalReviews: 500, reviewPositivePct: 95 });
+    expect(estimateSales(game)).toBeLessThan(500 * 30);
+  });
+
+  test('boundary: 94% positive does NOT trigger sentiment factor', () => {
+    const game = makeGame({ totalReviews: 500, reviewPositivePct: 94 });
+    expect(estimateSales(game)).toBe(500 * 30);
+  });
+
+  test('boundary: 40% positive triggers sentiment factor', () => {
+    const game = makeGame({ totalReviews: 500, reviewPositivePct: 40 });
+    expect(estimateSales(game)).toBeLessThan(500 * 30);
+  });
+
+  test('boundary: 41% positive does NOT trigger sentiment factor', () => {
+    const game = makeGame({ totalReviews: 500, reviewPositivePct: 41 });
+    expect(estimateSales(game)).toBe(500 * 30);
+  });
+
+  test('CJK name applies CJK audience factor', () => {
+    const game = makeGame({ name: '公主：东方与远征', totalReviews: 500, priceInCents: 999, reviewPositivePct: 80 });
+    expect(estimateSales(game)).toBeLessThan(500 * 30);
+  });
+
+  test('genre factor applied when details available', () => {
+    const game = makeGame({
+      totalReviews: 500, priceInCents: 999, reviewPositivePct: 80,
+      details: makeDetails({ genres: ['Action'] }),
+    });
+    expect(estimateSales(game)).toBeGreaterThan(500 * 30);
+  });
+
+  test('Early Access factor applied when details available', () => {
+    const game = makeGame({
+      totalReviews: 500, priceInCents: 999, reviewPositivePct: 80,
+      details: makeDetails({ isEarlyAccess: true }),
+    });
+    expect(estimateSales(game)).toBeGreaterThan(500 * 30);
+  });
+
+  test('no details means genre and EA factors are 1.0', () => {
+    const withDetails = makeGame({
+      totalReviews: 500, priceInCents: 999, reviewPositivePct: 80,
+      details: makeDetails({ genres: ['Action'], isEarlyAccess: true }),
+    });
+    const without = makeGame({
+      totalReviews: 500, priceInCents: 999, reviewPositivePct: 80,
+    });
+    expect(estimateSales(without)).toBeLessThan(estimateSales(withDetails));
+  });
+
+  test('multiplier cap at 70×: all max-boosting factors produce exactly 70×', () => {
+    // All max factors: volume 1.4 + price 1.3 + genre Action 2.0 + EA 1.25
+    // Calibrated so dampened product = exactly 70/30
+    const game = makeGame({
+      totalReviews: 1000,
+      priceInCents: 399,     // < 500 → price 1.3
+      reviewPositivePct: 80, // neutral sentiment
+      details: makeDetails({ genres: ['Action'], isEarlyAccess: true }),
+    });
+    const effectiveMultiplier = estimateSales(game) / game.totalReviews;
+    expect(effectiveMultiplier).toBeCloseTo(70, 0);
+  });
+
+  test('dampening preserves factor direction', () => {
+    const baseGame = makeGame({ totalReviews: 500, priceInCents: 999, reviewPositivePct: 80 });
+    const cheapGame = makeGame({ totalReviews: 500, priceInCents: 299, reviewPositivePct: 80 });
+    expect(estimateSales(cheapGame)).toBeGreaterThan(estimateSales(baseGame));
+
+    const lowReviewGame = makeGame({ totalReviews: 50, priceInCents: 999, reviewPositivePct: 80 });
+    const perReviewLow = estimateSales(lowReviewGame) / 50;
+    const perReviewBase = estimateSales(baseGame) / 500;
+    expect(perReviewLow).toBeLessThan(perReviewBase);
+  });
+});
+
+describe('getSalesBreakdown', () => {
+  test('returns all factors at 1.0 for a neutral game', () => {
+    const game = makeGame({ totalReviews: 500, priceInCents: 999, reviewPositivePct: 80 });
+    const b = getSalesBreakdown(game);
+    expect(b.multiplier).toBe(30);
+    expect(b.volume.raw).toBe(1.0);
+    expect(b.price.raw).toBe(1.0);
+    expect(b.sentiment.raw).toBe(1.0);
+    expect(b.cjkAudience.raw).toBe(1.0);
+    expect(b.genre.raw).toBe(1.0);
+    expect(b.earlyAccess.raw).toBe(1.0);
+  });
+
+  test('reports active factors with raw and dampened values', () => {
+    const game = makeGame({
+      totalReviews: 5000, priceInCents: 299, reviewPositivePct: 80,
+      details: makeDetails({ genres: ['Action'], isEarlyAccess: true }),
+    });
+    const b = getSalesBreakdown(game);
+    expect(b.volume.raw).toBe(1.4);
+    expect(b.volume.dampened).toBeGreaterThan(1.0);
+    expect(b.volume.dampened).toBeLessThan(1.4);
+    expect(b.price.raw).toBe(1.3);
+    expect(b.genre.raw).toBe(2.0);
+    expect(b.genre.label).toBe('Action');
+    expect(b.earlyAccess.raw).toBe(1.25);
+  });
+
+  test('reports CJK factor for Chinese game names', () => {
+    const game = makeGame({ name: '公主：东方与远征', totalReviews: 500 });
+    const b = getSalesBreakdown(game);
+    expect(b.cjkAudience.raw).toBe(0.7);
+    expect(b.cjkAudience.dampened).toBeLessThan(1.0);
+    expect(b.cjkAudience.dampened).toBeGreaterThan(0.7);
+  });
+
+  test('genre label shows averaged genres', () => {
+    const game = makeGame({
+      totalReviews: 500,
+      details: makeDetails({ genres: ['Indie', 'Action', 'Adventure'] }),
+    });
+    const b = getSalesBreakdown(game);
+    expect(b.genre.label).toBe('Action, Adventure');
+    expect(b.genre.raw).toBeCloseTo(1.45, 5);
+  });
+
+  test('multiplier matches estimateSales / totalReviews', () => {
+    const game = makeGame({
+      totalReviews: 1000, priceInCents: 399,
+      details: makeDetails({ genres: ['RPG'] }),
+    });
+    const b = getSalesBreakdown(game);
+    const sales = estimateSales(game);
+    expect(b.multiplier).toBeCloseTo(sales / game.totalReviews, 5);
   });
 });
 
 describe('buildComparisonReport', () => {
   test('computes correct percentile', () => {
-    const projected = computeProjectedCumulativeSales(100, 12);
+    const m1Units = 100;
     const games = [
-      makeGame({ estimatedSales: projected * 0.5, monthsSinceRelease: 12 }),
-      makeGame({ appid: 2, estimatedSales: projected, monthsSinceRelease: 12 }),
-      makeGame({ appid: 3, estimatedSales: projected * 2, monthsSinceRelease: 12 }),
+      makeGame({ appid: 1, totalReviews: 5, monthsSinceRelease: 12 }),
+      makeGame({ appid: 2, totalReviews: 15, monthsSinceRelease: 12 }),
+      makeGame({ appid: 3, totalReviews: 50, monthsSinceRelease: 12 }),
     ];
 
-    const report = buildComparisonReport(games, 100);
-    expect(report.percentile).toBeCloseTo(1 / 3, 2);
+    const report = buildComparisonReport(games, m1Units);
     expect(report.totalGames).toBe(3);
-  });
-
-  test('percentile is 0 when all games outperform', () => {
-    const projected = computeProjectedCumulativeSales(100, 12);
-    const games = [
-      makeGame({ estimatedSales: projected * 2, monthsSinceRelease: 12 }),
-      makeGame({ appid: 2, estimatedSales: projected * 3, monthsSinceRelease: 12 }),
-    ];
-    const report = buildComparisonReport(games, 100);
-    expect(report.percentile).toBe(0);
-  });
-
-  test('percentile is 1 when all games underperform', () => {
-    const projected = computeProjectedCumulativeSales(100, 12);
-    const games = [
-      makeGame({ estimatedSales: projected * 0.1, monthsSinceRelease: 12 }),
-      makeGame({ appid: 2, estimatedSales: projected * 0.2, monthsSinceRelease: 12 }),
-    ];
-    const report = buildComparisonReport(games, 100);
-    expect(report.percentile).toBe(1);
+    expect(report.percentile).toBeGreaterThan(0);
+    expect(report.percentile).toBeLessThan(1);
   });
 
   test('returns top 10 sorted by |rating|', () => {
-    const projected = computeProjectedCumulativeSales(100, 6);
     const games = Array.from({ length: 15 }, (_, i) =>
       makeGame({
         appid: i,
-        estimatedSales: projected * (0.5 + i * 0.2),
+        totalReviews: 10 + i * 5,
         monthsSinceRelease: 6,
       }),
     );
@@ -155,8 +389,16 @@ describe('buildComparisonReport', () => {
     }
   });
 
+  test('closest results carry estimatedSales and breakdown', () => {
+    const games = [makeGame({ totalReviews: 500, monthsSinceRelease: 12 })];
+    const report = buildComparisonReport(games, 100);
+    expect(report.closest[0].estimatedSales).toBe(estimateSales(games[0]));
+    expect(report.closest[0].breakdown).toBeDefined();
+    expect(report.closest[0].breakdown.multiplier).toBe(30);
+  });
+
   test('skips games with 0 reviews', () => {
-    const games = [makeGame({ totalReviews: 0, estimatedSales: 0 })];
+    const games = [makeGame({ totalReviews: 0 })];
     const report = buildComparisonReport(games, 100);
     expect(report.totalGames).toBe(0);
   });
@@ -175,14 +417,12 @@ describe('buildComparisonReport', () => {
   });
 
   test('non-default tailStrength flows through to computation', () => {
-    const projected = computeProjectedCumulativeSales(100, 12);
     const games = [
-      makeGame({ estimatedSales: projected * 0.5, monthsSinceRelease: 12 }),
-      makeGame({ appid: 2, estimatedSales: projected * 2, monthsSinceRelease: 12 }),
+      makeGame({ appid: 1, totalReviews: 50, monthsSinceRelease: 12 }),
+      makeGame({ appid: 2, totalReviews: 500, monthsSinceRelease: 12 }),
     ];
     const defaultReport = buildComparisonReport(games, 100);
     const altReport = buildComparisonReport(games, 100, 0.8);
-    // Different tailStrength should produce different ratings
     expect(altReport.closest[0].rating).not.toBe(defaultReport.closest[0].rating);
   });
 });

@@ -13,6 +13,8 @@ import { optimizeM1Values } from './engine/m1Optimizer';
 import { computeAccountingTimeSeries, computeAnnualizedNetProfit } from './engine/accountingTimeSeries';
 import { DEFAULT_MONTHLY_FIXED_EXPENSES, DEFAULT_PROJECT_COST_BASE, DEFAULT_PROJECT_COST_PER_MONTH, DEFAULT_PLATFORM_CUT_RATE } from './engine/expenses';
 import { getComparableGames, ensureFetchStarted } from './api/steamSearch';
+import { ensureDetailFetchStarted, fetchDetailsForGames } from './api/steamDetailFetch';
+import { createFetchProgress } from './components/fetchProgress';
 import type { DowntimeBreakdown, PricingInfo, SalesTimeSeries, AccountingTimeSeries } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -96,6 +98,19 @@ createInputPanel(inputsContainer, state.inputs, {
 // Side panel
 const sidePanel = createSidePanel(panelRoot);
 
+// Background fetch progress
+const fetchProgressUI = createFetchProgress(app);
+
+// Start Steam data fetch immediately on app load
+ensureFetchStarted((progress) => {
+  fetchProgressUI.updateSearch(progress);
+  if (progress.status === 'Complete' || progress.status === 'Loaded from cache') {
+    ensureDetailFetchStarted((detailProgress) => {
+      fetchProgressUI.updateDetail(detailProgress);
+    });
+  }
+});
+
 // Pre-computed per-project data (rebuilt on regenerate)
 let breakdowns = new Map<number, DowntimeBreakdown>();
 let pricingMap = new Map<number, PricingInfo>();
@@ -108,8 +123,12 @@ const timeline = createTimeline(timelineContainer, (project) => {
   const pricing = pricingMap.get(project.index);
   const sales = salesMap.get(project.index);
   if (breakdown && pricing) {
-    ensureFetchStarted();
-    sidePanel.show(project, breakdown, pricing, { sales, steamProvider: () => getComparableGames(), platformCutRate: state.inputs.platformCutRate });
+    sidePanel.show(project, breakdown, pricing, {
+      sales,
+      steamProvider: () => getComparableGames(),
+      platformCutRate: state.inputs.platformCutRate,
+      detailFetcher: (appids) => fetchDetailsForGames(appids),
+    });
   }
 });
 
