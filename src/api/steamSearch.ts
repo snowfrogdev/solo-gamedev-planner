@@ -6,7 +6,7 @@
  */
 
 import { createRateLimitedFetcher } from './rateLimiter';
-import { getCache, isCacheFresh, savePage, markFetchStarted, markFetchComplete } from './steamCache';
+import { getCache, isCacheFresh, savePage, markFetchStarted, markFetchComplete, clearCache } from './steamCache';
 import type { SteamGame, FetchProgress } from '../types';
 
 const RESULTS_PER_PAGE = 100;
@@ -192,6 +192,17 @@ export async function startBackgroundFetch(
   } finally {
     fetchInProgress = false;
   }
+}
+
+/** Force a fresh re-fetch of all Steam data, clearing cache first */
+export async function forceRefresh(
+  onProgress?: (progress: FetchProgress) => void,
+): Promise<void> {
+  if (fetchInProgress) return;
+  cachedGames = null;
+  fetchComplete = false;
+  await clearCache();
+  await startBackgroundFetch(onProgress);
 }
 
 /** Get cached games (from memory if available, otherwise from IndexedDB) */

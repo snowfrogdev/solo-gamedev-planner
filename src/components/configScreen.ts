@@ -18,6 +18,7 @@ export interface ConfigScreenCallbacks {
   onExpenseChange: (expenses: ExpenseInputs) => void;
   onClose: () => void;
   onReset: () => void;
+  onRefreshSteam: () => void;
 }
 
 /**
@@ -40,12 +41,21 @@ export function deepCopyCurve(c: BezierCurve): BezierCurve {
   return { p0: { ...c.p0 }, cp1: { ...c.cp1 }, cp2: { ...c.cp2 }, p3: { ...c.p3 } };
 }
 
+export function formatCacheAge(timestamp: number | null): string {
+  if (!timestamp) return 'Never fetched';
+  const days = Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24));
+  if (days === 0) return 'Updated today';
+  if (days === 1) return 'Updated 1 day ago';
+  return `Updated ${days} days ago`;
+}
+
 export function createConfigScreen(
   container: HTMLElement,
   config: DowntimeConfig,
   expenses: ExpenseInputs,
   callbacks: ConfigScreenCallbacks,
-): { show(): void; hide(): void; destroy(): void } {
+  cacheTimestamp?: number | null,
+): { show(): void; hide(): void; destroy(): void; updateCacheTimestamp(ts: number): void } {
   const overlay = document.createElement('div');
   overlay.className = 'config-overlay';
 
@@ -99,6 +109,11 @@ export function createConfigScreen(
           <span class="input-suffix">/month</span>
         </div>
       </div>
+    </div>
+    <h3 class="config-section-title">Steam Market Data</h3>
+    <div class="config-steam-section">
+      <span class="steam-cache-status">${formatCacheAge(cacheTimestamp ?? null)}</span>
+      <button class="config-refresh-steam-btn">Refresh Now</button>
     </div>
     <div class="config-actions">
       <button class="config-reset-btn reset-btn">Reset to Default</button>
@@ -338,6 +353,7 @@ export function createConfigScreen(
   modal.querySelector('.config-close-btn')!.addEventListener('click', callbacks.onClose);
   modal.querySelector('.config-done-btn')!.addEventListener('click', callbacks.onClose);
   modal.querySelector('.config-reset-btn')!.addEventListener('click', callbacks.onReset);
+  modal.querySelector('.config-refresh-steam-btn')!.addEventListener('click', callbacks.onRefreshSteam);
 
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) callbacks.onClose();
@@ -347,5 +363,9 @@ export function createConfigScreen(
     show() { overlay.classList.add('visible'); },
     hide() { overlay.classList.remove('visible'); },
     destroy() { svg.remove(); overlay.remove(); },
+    updateCacheTimestamp(ts: number) {
+      const el = modal.querySelector('.steam-cache-status');
+      if (el) el.textContent = formatCacheAge(ts);
+    },
   };
 }

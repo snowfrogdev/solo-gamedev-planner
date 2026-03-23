@@ -115,6 +115,19 @@ export async function markFetchComplete(): Promise<void> {
   await txComplete(tx);
 }
 
+/** Get the timestamp of the last completed fetch, or null if never fetched */
+export async function getCacheTimestamp(): Promise<number | null> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction(META_STORE, 'readonly');
+    const store = tx.objectStore(META_STORE);
+    const timestamp = await txPromise(store.get('fetchTimestamp'));
+    return timestamp ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Clear all cached data */
 export async function clearCache(): Promise<void> {
   const db = await getDb();

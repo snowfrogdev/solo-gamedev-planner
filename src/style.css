@@ -137,6 +137,8 @@ input[type="range"] {
   background: var(--border);
   outline: none;
   cursor: pointer;
+  position: relative;
+  z-index: 1;
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -229,6 +231,36 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text);
+}
+
+.stat-label-with-tooltip {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dotted var(--text);
+}
+
+.stat-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+  color: var(--text);
+  pointer-events: none;
+  z-index: 10;
+  margin-bottom: 4px;
+}
+
+.stat-label-with-tooltip:hover .stat-tooltip {
+  display: block;
 }
 
 /* Timeline Chart */
@@ -425,6 +457,33 @@ input[type="range"]:disabled::-webkit-slider-thumb {
 .config-input-field .input-operator {
   font-size: 0.8rem;
   color: var(--text);
+}
+
+.config-steam-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+.steam-cache-status {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.config-refresh-steam-btn {
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.config-refresh-steam-btn:hover {
+  background: var(--border);
 }
 
 .config-actions {

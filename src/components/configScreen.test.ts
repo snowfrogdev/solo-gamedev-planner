@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { GlobalWindow } from 'happy-dom';
-import { clamp, deepCopyCurve, createConfigScreen } from './configScreen';
+import { clamp, deepCopyCurve, createConfigScreen, formatCacheAge } from './configScreen';
 import type { BezierCurve, DowntimeConfig } from '../types';
 import type { ExpenseInputs, ConfigScreenCallbacks } from './configScreen';
 import { getDefaultSupportCurve, getDefaultRecoveryCurve, getDefaultSupportMax, getDefaultRecoveryMax, DOWNTIME_X_MIN, DOWNTIME_X_MAX } from '../engine/downtimeDefaults';
@@ -56,6 +56,24 @@ describe('deepCopyCurve', () => {
   });
 });
 
+describe('formatCacheAge', () => {
+  test('returns "Never fetched" for null', () => {
+    expect(formatCacheAge(null)).toBe('Never fetched');
+  });
+
+  test('returns "Updated today" for recent timestamp', () => {
+    expect(formatCacheAge(Date.now())).toBe('Updated today');
+  });
+
+  test('returns "Updated 1 day ago" for yesterday', () => {
+    expect(formatCacheAge(Date.now() - 86400000)).toBe('Updated 1 day ago');
+  });
+
+  test('returns plural days for older timestamps', () => {
+    expect(formatCacheAge(Date.now() - 86400000 * 5)).toBe('Updated 5 days ago');
+  });
+});
+
 // --- DOM tests ---
 
 function makeConfig(): DowntimeConfig {
@@ -98,6 +116,7 @@ function makeCallbacks(overrides?: Partial<ConfigScreenCallbacks>): ConfigScreen
     onExpenseChange: overrides?.onExpenseChange ?? (() => {}),
     onClose: overrides?.onClose ?? (() => {}),
     onReset: overrides?.onReset ?? (() => {}),
+    onRefreshSteam: overrides?.onRefreshSteam ?? (() => {}),
   };
 }
 
@@ -153,6 +172,18 @@ describe('createConfigScreen', () => {
     const resetBtn = container.querySelector('.config-reset-btn') as HTMLElement;
     resetBtn.click();
     expect(reset).toBe(true);
+  });
+
+  test('refresh steam button triggers onRefreshSteam callback', () => {
+    let refreshed = false;
+    const screen = createConfigScreen(container, makeConfig(), defaultExpenses, makeCallbacks({
+      onRefreshSteam: () => { refreshed = true; },
+    }));
+    screen.show();
+
+    const btn = container.querySelector('.config-refresh-steam-btn') as HTMLElement;
+    btn.click();
+    expect(refreshed).toBe(true);
   });
 
   test('overlay click triggers onClose', () => {

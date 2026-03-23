@@ -30,18 +30,20 @@ function renderStats(
   container: HTMLElement,
   plan: GeneratedPlan,
   annualizedNetProfit: number,
+  targetDevScope: number,
 ): void {
   const statsEl = document.createElement('div');
   statsEl.className = 'timeline-stats';
   const avgDev = plan.projects.reduce((s, p) => s + p.devDurationMonths, 0) / plan.projects.length;
   const avgDown = plan.projects.reduce((s, p) => s + p.downtimeMonths, 0) / plan.projects.length;
+  const trailingMonths = Math.max(12, targetDevScope);
 
   statsEl.innerHTML = `
     <div class="stat"><span class="stat-value">${plan.projects.length}</span><span class="stat-label">Games</span></div>
     <div class="stat"><span class="stat-value">${plan.totalMonths.toFixed(1)}</span><span class="stat-label">Total Months</span></div>
     <div class="stat"><span class="stat-value">${avgDev.toFixed(1)}mo</span><span class="stat-label">Avg Dev Time</span></div>
     <div class="stat"><span class="stat-value">${avgDown.toFixed(1)}mo</span><span class="stat-label">Avg Downtime</span></div>
-    <div class="stat"><span class="stat-value">$${Math.round(annualizedNetProfit).toLocaleString()}</span><span class="stat-label">Est. Annual Net Profit</span></div>
+    <div class="stat"><span class="stat-value">$${Math.round(annualizedNetProfit).toLocaleString()}</span><span class="stat-label stat-label-with-tooltip">Avg. Annual Net Profit<span class="stat-tooltip">Net profit averaged over the final ${trailingMonths} months of the plan, annualized to 12 months</span></span></div>
   `;
   container.appendChild(statsEl);
 }
@@ -309,7 +311,7 @@ export function createTimeline(
       return;
     }
 
-    renderStats(container, plan, annualizedNetProfit ?? 0);
+    renderStats(container, plan, annualizedNetProfit ?? 0, inputs.targetDevScope);
 
     // Chart wrapper (for tooltip positioning)
     const chartWrapper = document.createElement('div');

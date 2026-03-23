@@ -12,7 +12,8 @@ import { computeSalesTimeSeries } from './engine/salesModel';
 import { optimizeM1Values } from './engine/m1Optimizer';
 import { computeAccountingTimeSeries, computeAnnualizedNetProfit } from './engine/accountingTimeSeries';
 import { DEFAULT_MONTHLY_FIXED_EXPENSES, DEFAULT_PROJECT_COST_BASE, DEFAULT_PROJECT_COST_PER_MONTH, DEFAULT_PLATFORM_CUT_RATE } from './engine/expenses';
-import { getComparableGames, ensureFetchStarted } from './api/steamSearch';
+import { getComparableGames, ensureFetchStarted, forceRefresh } from './api/steamSearch';
+import { getCacheTimestamp } from './api/steamCache';
 import { ensureDetailFetchStarted, fetchDetailsForGames } from './api/steamDetailFetch';
 import { createFetchProgress } from './components/fetchProgress';
 import type { DowntimeBreakdown, PricingInfo, SalesTimeSeries, AccountingTimeSeries } from './types';
@@ -36,53 +37,73 @@ const configRoot = app.querySelector<HTMLElement>('#config-root')!;
 
 // Config screen (lazy init)
 let configScreen: ReturnType<typeof createConfigScreen> | null = null;
+let configScreenLoading = false;
 
-function openConfig(): void {
+async function openConfig(): Promise<void> {
+  if (configScreenLoading) return;
   if (!configScreen) {
-    configScreen = createConfigScreen(
-      configRoot,
-      state.downtimeConfig,
-      {
-        monthlyFixedExpenses: state.inputs.monthlyFixedExpenses,
-        projectCostBase: state.inputs.projectCostBase,
-        projectCostPerMonth: state.inputs.projectCostPerMonth,
-        platformCutRate: state.inputs.platformCutRate,
-      },
-      {
-        onChange(config) {
-          updateState({ downtimeConfig: config, useCustomDowntime: true });
+    configScreenLoading = true;
+    try {
+      const timestamp = await getCacheTimestamp();
+      configScreen = createConfigScreen(
+        configRoot,
+        state.downtimeConfig,
+        {
+          monthlyFixedExpenses: state.inputs.monthlyFixedExpenses,
+          projectCostBase: state.inputs.projectCostBase,
+          projectCostPerMonth: state.inputs.projectCostPerMonth,
+          platformCutRate: state.inputs.platformCutRate,
         },
-        onExpenseChange(expenses) {
-          updateState({ inputs: { ...state.inputs, ...expenses } });
+        {
+          onChange(config) {
+            updateState({ downtimeConfig: config, useCustomDowntime: true });
+          },
+          onExpenseChange(expenses) {
+            updateState({ inputs: { ...state.inputs, ...expenses } });
+          },
+          onClose() {
+            configScreen?.hide();
+          },
+          onReset() {
+            updateState({
+              downtimeConfig: {
+                supportCurve: getDefaultSupportCurve(),
+                recoveryCurve: getDefaultRecoveryCurve(),
+                minInput: DOWNTIME_X_MIN,
+                maxInput: DOWNTIME_X_MAX,
+                supportMaxOutput: getDefaultSupportMax(),
+                recoveryMaxOutput: getDefaultRecoveryMax(),
+              },
+              useCustomDowntime: false,
+              inputs: {
+                ...state.inputs,
+                monthlyFixedExpenses: DEFAULT_MONTHLY_FIXED_EXPENSES,
+                projectCostBase: DEFAULT_PROJECT_COST_BASE,
+                projectCostPerMonth: DEFAULT_PROJECT_COST_PER_MONTH,
+                platformCutRate: DEFAULT_PLATFORM_CUT_RATE,
+              },
+            });
+            configScreen?.destroy();
+            configScreen = null;
+            openConfig();
+          },
+          onRefreshSteam() {
+            forceRefresh((progress) => {
+              fetchProgressUI.updateSearch(progress);
+              if (progress.status === 'Complete' || progress.status === 'Loaded from cache') {
+                configScreen?.updateCacheTimestamp(Date.now());
+                ensureDetailFetchStarted((detailProgress) => {
+                  fetchProgressUI.updateDetail(detailProgress);
+                });
+              }
+            }).catch(() => {});
+          },
         },
-        onClose() {
-          configScreen?.hide();
-        },
-        onReset() {
-          updateState({
-            downtimeConfig: {
-              supportCurve: getDefaultSupportCurve(),
-              recoveryCurve: getDefaultRecoveryCurve(),
-              minInput: DOWNTIME_X_MIN,
-              maxInput: DOWNTIME_X_MAX,
-              supportMaxOutput: getDefaultSupportMax(),
-              recoveryMaxOutput: getDefaultRecoveryMax(),
-            },
-            useCustomDowntime: false,
-            inputs: {
-              ...state.inputs,
-              monthlyFixedExpenses: DEFAULT_MONTHLY_FIXED_EXPENSES,
-              projectCostBase: DEFAULT_PROJECT_COST_BASE,
-              projectCostPerMonth: DEFAULT_PROJECT_COST_PER_MONTH,
-              platformCutRate: DEFAULT_PLATFORM_CUT_RATE,
-            },
-          });
-          configScreen?.destroy();
-          configScreen = null;
-          openConfig();
-        },
-      },
-    );
+        timestamp,
+      );
+    } finally {
+      configScreenLoading = false;
+    }
   }
   configScreen.show();
 }

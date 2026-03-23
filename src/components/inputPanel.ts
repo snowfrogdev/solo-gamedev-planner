@@ -19,7 +19,7 @@ export function createInputPanel(
         <div class="slider-column-left">
           <div class="slider-group">
             <div class="slider-header">
-              <label for="minDevScope">Minimum Dev Scope</label>
+              <label for="minDevScope">First Game Dev Scope</label>
               <span class="slider-value" id="minDevScopeValue">${current.minDevScope} months</span>
             </div>
             <input type="range" id="minDevScope" min="1" max="24" step="1" value="${current.minDevScope}">

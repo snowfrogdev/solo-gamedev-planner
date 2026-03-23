@@ -125,7 +125,7 @@ describe('createTimeline DOM', () => {
 
     const statsHtml = container.querySelector('.timeline-stats')!.innerHTML;
     expect(statsHtml).toContain('$25,000');
-    expect(statsHtml).toContain('Est. Annual Net Profit');
+    expect(statsHtml).toContain('Avg. Annual Net Profit');
   });
 
   test('shows $0 income when no annualized income provided', () => {
