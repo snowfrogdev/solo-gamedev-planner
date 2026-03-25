@@ -42,17 +42,48 @@ function parseAppDetails(data: Record<string, unknown>): SteamGameDetails | null
   };
 }
 
-/** Fetch details for a single game via the appdetails API */
-async function fetchSingleDetail(
+/** Fetch Chinese review percentage via the appreviews API.
+ *  Both numerator and denominator come from the same API to avoid count mismatches. */
+async function fetchChineseReviewPct(
   appid: number,
   fetcher: (url: string) => Promise<Response>,
+): Promise<number> {
+  // Total reviews (all languages)
+  const allUrl = `https://store.steampowered.com/appreviews/${appid}?json=1&language=all&num_per_page=0&purchase_type=all`;
+  const allResp = await fetcher(allUrl);
+  const allJson = await allResp.json();
+  const allCount = (allJson?.query_summary?.total_positive ?? 0) + (allJson?.query_summary?.total_negative ?? 0);
+  if (allCount <= 0) return 0;
+
+  // Chinese reviews
+  const cnUrl = `https://store.steampowered.com/appreviews/${appid}?json=1&language=schinese&num_per_page=0&purchase_type=all`;
+  const cnResp = await fetcher(cnUrl);
+  const cnJson = await cnResp.json();
+  const cnCount = (cnJson?.query_summary?.total_positive ?? 0) + (cnJson?.query_summary?.total_negative ?? 0);
+
+  return cnCount / allCount;
+}
+
+/** Fetch details for a single game via the appdetails API + Chinese review percentage */
+async function fetchSingleDetail(
+  game: SteamGame,
+  fetcher: (url: string) => Promise<Response>,
 ): Promise<SteamGameDetails | null> {
-  const url = `https://store.steampowered.com/api/appdetails?appids=${appid}&cc=us`;
+  const url = `https://store.steampowered.com/api/appdetails?appids=${game.appid}&cc=us`;
   const response = await fetcher(url);
   const json = await response.json();
-  const entry = json[String(appid)];
+  const entry = json[String(game.appid)];
   if (!entry) return null;
-  return parseAppDetails(entry);
+  const details = parseAppDetails(entry);
+  if (!details) return null;
+
+  try {
+    details.chineseReviewPct = await fetchChineseReviewPct(game.appid, fetcher);
+  } catch {
+    // Non-critical — leave chineseReviewPct undefined on failure
+  }
+
+  return details;
 }
 
 /**
@@ -108,7 +139,7 @@ export async function startDetailFetch(
       });
 
       try {
-        const details = await fetchSingleDetail(game.appid, rateLimitedFetch);
+        const details = await fetchSingleDetail(game, rateLimitedFetch);
         if (details) {
           game.details = details;
           await saveGameWithDetails(game);
@@ -162,15 +193,26 @@ export async function fetchDetailsForGames(appids: number[]): Promise<SteamGame[
     const game = gameMap.get(appid);
     if (!game) continue;
 
-    // Skip if details already present (snapshot from getCache — background
-    // fetch may have saved details since, but duplicate fetches are benign)
+    // Backfill chineseReviewPct for games with details from a prior cache version
+    if (game.details && game.details.chineseReviewPct === undefined) {
+      try {
+        game.details.chineseReviewPct = await fetchChineseReviewPct(appid, rateLimitedFetch);
+        await saveGameWithDetails(game);
+      } catch {
+        // Non-critical — continue without it
+      }
+      results.push(game);
+      continue;
+    }
+
+    // Skip if details already present
     if (game.details) {
       results.push(game);
       continue;
     }
 
     try {
-      const details = await fetchSingleDetail(appid, rateLimitedFetch);
+      const details = await fetchSingleDetail(game, rateLimitedFetch);
       if (details) {
         game.details = details;
         await saveGameWithDetails(game);

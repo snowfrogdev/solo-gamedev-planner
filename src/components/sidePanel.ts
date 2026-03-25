@@ -16,7 +16,7 @@ function formatBreakdownTooltip(b: SalesBreakdown): string {
     { name: 'Volume', detail: b.volume },
     { name: 'Price', detail: b.price },
     { name: 'Sentiment', detail: b.sentiment },
-    { name: 'Chinese', detail: b.cjkAudience },
+    { name: 'Chinese', detail: b.chineseAudience, label: b.chineseAudience.raw < 1 ? `${Math.round((1 - b.chineseAudience.raw) / 0.3 * 100)}% reviews` : '' },
     { name: 'Genre', detail: b.genre, label: b.genre.label },
     { name: 'EA', detail: b.earlyAccess },
   ];
@@ -274,6 +274,7 @@ function renderRevenueChart(
 interface SidePanelShowOptions {
   sales?: SalesTimeSeries;
   steamProvider?: () => Promise<SteamGame[]>;
+  isIndexingComplete?: () => boolean;
   platformCutRate?: number;
   detailFetcher?: (appids: number[]) => Promise<SteamGame[]>;
   accentColor?: string;
@@ -366,7 +367,7 @@ export function createSidePanel(
     previouslyFocused = document.activeElement as HTMLElement | null;
     openedViaKeyboard = previouslyFocused?.matches(':focus-visible') ?? false;
     panel.setAttribute('aria-label', `Game #${project.index + 1} Details`);
-    const { sales, steamProvider, platformCutRate, detailFetcher, accentColor } = opts ?? {};
+    const { sales, steamProvider, isIndexingComplete, platformCutRate, detailFetcher, accentColor } = opts ?? {};
     const safeColor = accentColor && /^#[0-9a-fA-F]{3,8}$/.test(accentColor) ? accentColor : '';
     const cycleDuration = project.devDurationMonths + project.downtimeMonths;
     const showChart = sales && sales.monthlySales.length >= 2;
@@ -511,7 +512,9 @@ export function createSidePanel(
 
     if (sales && steamProvider) {
       const compContainer = panel.querySelector<HTMLElement>('.steam-comparison-container');
-      if (compContainer) {
+      if (compContainer && isIndexingComplete && !isIndexingComplete()) {
+        compContainer.innerHTML = '<p class="compare-pending">Steam game indexing is still in progress. Comparison data will be available once indexing completes.</p>';
+      } else if (compContainer) {
         (async () => {
           try {
             const priceCents = Math.round(pricing.launchPrice * 100);

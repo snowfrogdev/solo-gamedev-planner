@@ -100,6 +100,7 @@ export interface AccountingTimeSeries {
 export interface SteamGameDetails {
   genres: string[];        // e.g. ["Action", "Indie"]
   isEarlyAccess: boolean;
+  chineseReviewPct?: number; // 0–1 fraction of reviews in Simplified Chinese
   fetchedAt: number;       // Date.now() when fetched
 }
 

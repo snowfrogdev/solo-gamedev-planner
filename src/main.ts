@@ -12,7 +12,7 @@ import { computeSalesTimeSeries } from './engine/salesModel';
 import { optimizeM1Values } from './engine/m1Optimizer';
 import { computeAccountingTimeSeries, computeAnnualizedNetProfit } from './engine/accountingTimeSeries';
 import { DEFAULT_MONTHLY_FIXED_EXPENSES, DEFAULT_PROJECT_COST_BASE, DEFAULT_PROJECT_COST_PER_MONTH, DEFAULT_PLATFORM_CUT_RATE } from './engine/expenses';
-import { getComparableGames, ensureFetchStarted, forceRefresh } from './api/steamSearch';
+import { getComparableGames, ensureFetchStarted, forceRefresh, isFetchDone } from './api/steamSearch';
 import { getCacheTimestamp } from './api/steamCache';
 import { ensureDetailFetchStarted, fetchDetailsForGames } from './api/steamDetailFetch';
 import { createFetchProgress } from './components/fetchProgress';
@@ -164,6 +164,7 @@ const timeline = createTimeline(timelineContainer, (project, color) => {
     sidePanel.show(project, breakdown, pricing, {
       sales,
       steamProvider: () => getComparableGames(),
+      isIndexingComplete: isFetchDone,
       platformCutRate: state.inputs.platformCutRate,
       detailFetcher: (appids) => fetchDetailsForGames(appids),
       accentColor: color,

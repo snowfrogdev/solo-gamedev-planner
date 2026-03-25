@@ -5,7 +5,6 @@ import {
   estimateSales,
   getSalesBreakdown,
   getGenreFactor,
-  hasCjkCharacters,
   buildComparisonReport,
   filterByPriceTier,
   DEFAULT_TAIL_STRENGTH,
@@ -104,20 +103,47 @@ describe('computeProjectedCumulativeSales', () => {
   });
 });
 
-describe('hasCjkCharacters', () => {
-  test('detects CJK characters', () => {
-    expect(hasCjkCharacters('公主：东方与远征')).toBe(true);
-    expect(hasCjkCharacters('Game Name 中文')).toBe(true);
+describe('CJK audience factor (chineseReviewPct)', () => {
+  test('game with 50% Chinese reviews gets proportional CJK factor', () => {
+    const game = makeGame({
+      totalReviews: 500,
+      details: makeDetails({ chineseReviewPct: 0.5 }),
+    });
+    const b = getSalesBreakdown(game);
+    expect(b.chineseAudience.raw).toBeCloseTo(0.85, 5); // 1 - 0.5 * 0.3
   });
 
-  test('returns false for non-CJK text', () => {
-    expect(hasCjkCharacters('Test Game')).toBe(false);
-    expect(hasCjkCharacters('Über Cool Game')).toBe(false);
-    expect(hasCjkCharacters('')).toBe(false);
+  test('game with 100% Chinese reviews gets 0.7 factor', () => {
+    const game = makeGame({
+      totalReviews: 500,
+      details: makeDetails({ chineseReviewPct: 1.0 }),
+    });
+    const b = getSalesBreakdown(game);
+    expect(b.chineseAudience.raw).toBeCloseTo(0.7, 5);
   });
 
-  test('detects CJK extension B characters', () => {
-    expect(hasCjkCharacters('\u3400')).toBe(true);
+  test('game with 0% Chinese reviews gets 1.0 factor', () => {
+    const game = makeGame({
+      totalReviews: 500,
+      details: makeDetails({ chineseReviewPct: 0 }),
+    });
+    const b = getSalesBreakdown(game);
+    expect(b.chineseAudience.raw).toBe(1.0);
+  });
+
+  test('game without details gets 1.0 factor (no adjustment)', () => {
+    const game = makeGame({ totalReviews: 500 });
+    const b = getSalesBreakdown(game);
+    expect(b.chineseAudience.raw).toBe(1.0);
+  });
+
+  test('game with details but missing chineseReviewPct gets 1.0 factor', () => {
+    const game = makeGame({
+      totalReviews: 500,
+      details: makeDetails(), // no chineseReviewPct
+    });
+    const b = getSalesBreakdown(game);
+    expect(b.chineseAudience.raw).toBe(1.0);
   });
 });
 
@@ -241,8 +267,11 @@ describe('estimateSales', () => {
     expect(estimateSales(game)).toBe(500 * 30);
   });
 
-  test('CJK name applies CJK audience factor', () => {
-    const game = makeGame({ name: '公主：东方与远征', totalReviews: 500, priceInCents: 999, reviewPositivePct: 80 });
+  test('Chinese review percentage applies CJK audience factor', () => {
+    const game = makeGame({
+      totalReviews: 500, priceInCents: 999, reviewPositivePct: 80,
+      details: makeDetails({ chineseReviewPct: 0.8 }),
+    });
     expect(estimateSales(game)).toBeLessThan(500 * 30);
   });
 
@@ -306,7 +335,7 @@ describe('getSalesBreakdown', () => {
     expect(b.volume.raw).toBe(1.0);
     expect(b.price.raw).toBe(1.0);
     expect(b.sentiment.raw).toBe(1.0);
-    expect(b.cjkAudience.raw).toBe(1.0);
+    expect(b.chineseAudience.raw).toBe(1.0);
     expect(b.genre.raw).toBe(1.0);
     expect(b.earlyAccess.raw).toBe(1.0);
   });
@@ -326,12 +355,14 @@ describe('getSalesBreakdown', () => {
     expect(b.earlyAccess.raw).toBe(1.25);
   });
 
-  test('reports CJK factor for Chinese game names', () => {
-    const game = makeGame({ name: '公主：东方与远征', totalReviews: 500 });
+  test('reports CJK factor for game with Chinese reviews (undampened)', () => {
+    const game = makeGame({
+      totalReviews: 500,
+      details: makeDetails({ chineseReviewPct: 1.0 }),
+    });
     const b = getSalesBreakdown(game);
-    expect(b.cjkAudience.raw).toBe(0.7);
-    expect(b.cjkAudience.dampened).toBeLessThan(1.0);
-    expect(b.cjkAudience.dampened).toBeGreaterThan(0.7);
+    expect(b.chineseAudience.raw).toBe(0.7);
+    expect(b.chineseAudience.dampened).toBe(0.7); // Not dampened — applied directly
   });
 
   test('genre label shows averaged genres', () => {

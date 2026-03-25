@@ -9,7 +9,7 @@ const MAX_MULTIPLIER = 70;
 /**
  * Dampening exponent applied to each adjustment factor before they are
  * multiplied together. Each factor (volume tier, price, sentiment, genre,
- * Early Access, Chinese audience) was derived from independent studies that
+ * Early Access) was derived from independent studies that
  * examined it in isolation. When compounded naïvely, correlated factors
  * overstate their combined effect — e.g., Action games tend to also be in
  * the high-review tier, so multiplying both at full strength double-counts.
@@ -76,10 +76,11 @@ function getGenreLabels(genres: string[]): string {
   return labels.length > 0 ? labels.join(', ') : '';
 }
 
-/** Detect CJK characters in a game name (proxy for Chinese audience) */
-const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf]/;
-export function hasCjkCharacters(name: string): boolean {
-  return CJK_REGEX.test(name);
+/** Continuous CJK audience factor based on Chinese review percentage (0–1).
+ *  Returns 0.7 at 100% Chinese, 1.0 at 0%, linear interpolation between. */
+function chineseAudienceFactor(game: SteamGame): number {
+  const pct = game.details?.chineseReviewPct ?? 0;
+  return 1 - pct * 0.3;
 }
 
 export const DEFAULT_TAIL_STRENGTH = 0.55;
@@ -94,7 +95,7 @@ export interface SalesBreakdown {
   volume: FactorDetail;
   price: FactorDetail;
   sentiment: FactorDetail;
-  cjkAudience: FactorDetail;
+  chineseAudience: FactorDetail;
   genre: FactorDetail & { label: string };
   earlyAccess: FactorDetail;
 }
@@ -155,8 +156,8 @@ function computeRawFactors(game: SteamGame) {
   const sentiment =
     (game.reviewPositivePct >= 95 || game.reviewPositivePct <= 40) ? 0.85 : 1.0;
 
-  // CJK audience (detected from CJK characters in game name)
-  const cjkAudience = hasCjkCharacters(game.name) ? 0.7 : 1.0;
+  // CJK audience (proportional to Chinese review share)
+  const chineseAudience = chineseAudienceFactor(game);
 
   // Genre and Early Access from detail data (when available)
   let genre = 1.0;
@@ -168,7 +169,7 @@ function computeRawFactors(game: SteamGame) {
     if (game.details.isEarlyAccess) earlyAccess = 1.25;
   }
 
-  return { volume, price, sentiment, cjkAudience, genre, genreLabel, earlyAccess };
+  return { volume, price, sentiment, chineseAudience, genre, genreLabel, earlyAccess };
 }
 
 /** Get the full breakdown of how each factor contributes to the sales estimate */
@@ -180,7 +181,7 @@ export function getSalesBreakdown(game: SteamGame): SalesBreakdown {
       * dampen(f.volume)
       * dampen(f.price)
       * dampen(f.sentiment)
-      * dampen(f.cjkAudience)
+      * f.chineseAudience           // Not dampened — audience composition is orthogonal to game characteristics
       * dampen(f.genre)
       * dampen(f.earlyAccess),
     MAX_MULTIPLIER,
@@ -191,7 +192,7 @@ export function getSalesBreakdown(game: SteamGame): SalesBreakdown {
     volume: { raw: f.volume, dampened: dampen(f.volume) },
     price: { raw: f.price, dampened: dampen(f.price) },
     sentiment: { raw: f.sentiment, dampened: dampen(f.sentiment) },
-    cjkAudience: { raw: f.cjkAudience, dampened: dampen(f.cjkAudience) },
+    chineseAudience: { raw: f.chineseAudience, dampened: f.chineseAudience }, // Undampened — audience composition is independent of game characteristics
     genre: { raw: f.genre, dampened: dampen(f.genre), label: f.genreLabel },
     earlyAccess: { raw: f.earlyAccess, dampened: dampen(f.earlyAccess) },
   };
