@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { optimizeM1Values } from './m1Optimizer';
+import { optimizeM1Values, monotonicityScore } from './m1Optimizer';
 import { generatePlan } from './projectGenerator';
 import { computeLaunchPrice } from './pricingModel';
 import { computeSalesTimeSeries } from './salesModel';
@@ -47,11 +47,11 @@ describe('optimizeM1Values', () => {
     }
   });
 
-  test('M₁ values are non-decreasing', () => {
+  test('M₁ values generally trend upward (last >= first)', () => {
     const { plan, pricingMap } = buildMaps(baseInputs);
     const m1Values = optimizeM1Values(plan.projects, pricingMap, baseInputs);
-    for (let i = 1; i < m1Values.length; i++) {
-      expect(m1Values[i]).toBeGreaterThanOrEqual(m1Values[i - 1]);
+    if (m1Values.length >= 2) {
+      expect(m1Values[m1Values.length - 1]).toBeGreaterThanOrEqual(m1Values[0]);
     }
   });
 
@@ -110,6 +110,23 @@ describe('optimizeM1Values', () => {
     }
   });
 
+  test('longer horizon does not increase first project M₁', () => {
+    const shortInputs = { ...baseInputs, timeHorizonMonths: 60 };
+    const longInputs = { ...baseInputs, timeHorizonMonths: 120 };
+    const { plan: shortPlan, pricingMap: shortPricing } = buildMaps(shortInputs);
+    const { plan: longPlan, pricingMap: longPricing } = buildMaps(longInputs);
+    const shortM1 = optimizeM1Values(shortPlan.projects, shortPricing, shortInputs);
+    const longM1 = optimizeM1Values(longPlan.projects, longPricing, longInputs);
+    // First project M₁ should not increase with longer horizon (10% tolerance)
+    expect(longM1[0]).toBeLessThanOrEqual(shortM1[0] * 1.1);
+  });
+
+  test('optimized M₁ values have monotonicityScore above 0.7', () => {
+    const { plan, pricingMap } = buildMaps(baseInputs);
+    const m1Values = optimizeM1Values(plan.projects, pricingMap, baseInputs);
+    expect(monotonicityScore(m1Values)).toBeGreaterThanOrEqual(0.7);
+  });
+
   test('M1 values form a roughly smooth progression', () => {
     const { plan, pricingMap } = buildMaps(baseInputs);
     const m1Values = optimizeM1Values(plan.projects, pricingMap, baseInputs);
@@ -119,5 +136,34 @@ describe('optimizeM1Values', () => {
         expect(m1Values[i]).toBeLessThanOrEqual(m1Values[i - 1] * 5);
       }
     }
+  });
+});
+
+describe('monotonicityScore', () => {
+  test('returns 1 for non-decreasing sequence', () => {
+    expect(monotonicityScore([1, 2, 3, 4, 5])).toBe(1);
+  });
+
+  test('returns 1 for all-equal values', () => {
+    expect(monotonicityScore([5, 5, 5])).toBe(1);
+  });
+
+  test('returns 1 for single element', () => {
+    expect(monotonicityScore([42])).toBe(1);
+  });
+
+  test('returns 1 for empty array', () => {
+    expect(monotonicityScore([])).toBe(1);
+  });
+
+  test('returns less than 1 for decreasing sequence', () => {
+    expect(monotonicityScore([5, 4, 3, 2, 1])).toBeLessThan(1);
+    expect(monotonicityScore([5, 4, 3, 2, 1])).toBeGreaterThan(0);
+  });
+
+  test('returns lower score for more violations', () => {
+    const oneViolation = monotonicityScore([1, 3, 2, 4, 5]);
+    const manyViolations = monotonicityScore([5, 1, 5, 1, 5]);
+    expect(oneViolation).toBeGreaterThan(manyViolations);
   });
 });

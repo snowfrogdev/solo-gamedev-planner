@@ -1,8 +1,10 @@
 import type { PlannerInputs, PlannedProject, PricingInfo } from '../types';
 import { mulberry32 } from './prng';
-import { computeSalesTimeSeries } from './salesModel';
+import { computeSalesTimeSeries, unitSalesDecay } from './salesModel';
+import { DEFAULT_TAIL_STRENGTH } from './steamComparison';
 import { computeAccountingTimeSeries, computeAnnualizedNetProfit } from './accountingTimeSeries';
 import { smoothness } from './optimizerUtils';
+import { averageEffectivePrice } from './pricingModel';
 
 const MAX_ITERATIONS = 2000;
 const M1_FLOOR = 1;
@@ -11,7 +13,8 @@ function hashM1Inputs(inputs: PlannerInputs, projectCount: number): number {
   let hash = 13;
   hash = (hash * 31 + Math.round(inputs.targetIncome)) | 0;
   hash = (hash * 31 + projectCount) | 0;
-  hash = (hash * 31 + Math.round(inputs.timeHorizonMonths * 100)) | 0;
+  // timeHorizonMonths excluded: project count already captures horizon changes,
+  // and including it causes chaotic M1 jumps when nudging the horizon slider.
   hash = (hash * 31 + Math.round(inputs.targetDevScope * 100)) | 0;
   hash = (hash * 31 + Math.round(inputs.platformCutRate * 1000)) | 0;
   return hash;
@@ -40,6 +43,21 @@ function evaluateAnnualizedIncome(
   return computeAnnualizedNetProfit(accounting, horizon, inputs.targetDevScope);
 }
 
+/** Soft monotonicity score: 1 if non-decreasing, reduced for each violation */
+export function monotonicityScore(values: number[]): number {
+  if (values.length < 2) return 1;
+  let totalMagnitude = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] < values[i - 1]) {
+      totalMagnitude += values[i - 1] - values[i];
+    }
+  }
+  if (totalMagnitude === 0) return 1;
+  const range = Math.max(1, Math.max(...values) - Math.min(...values));
+  // Normalize by length so longer plans tolerate more local dips
+  return Math.max(0, 1 - totalMagnitude / (range * values.length));
+}
+
 function m1Fitness(
   m1Values: number[],
   projects: PlannedProject[],
@@ -55,17 +73,15 @@ function m1Fitness(
   // slightly prefers overshooting but still converges toward the target.
   const coverage = ratio <= 1 ? ratio : Math.max(0, 1 - (ratio - 1) * 0.5);
   const smooth = smoothness(m1Values);
-  return (2 * coverage + smooth) / 3;
+  const monotonic = monotonicityScore(m1Values);
+  // Coverage dominates (50%), monotonicity (25%), smoothness (25%)
+  return (4 * coverage + 2 * monotonic + 2 * smooth) / 8;
 }
 
 function enforceM1Constraints(values: number[]): void {
-  // Floor
+  // Floor only — non-decreasing is now a soft penalty in the fitness function
   for (let i = 0; i < values.length; i++) {
     values[i] = Math.max(M1_FLOOR, Math.round(values[i]));
-  }
-  // Non-decreasing
-  for (let i = 1; i < values.length; i++) {
-    if (values[i] < values[i - 1]) values[i] = values[i - 1];
   }
 }
 
@@ -110,12 +126,47 @@ export function optimizeM1Values(
 
   const rand = mulberry32(hashM1Inputs(inputs, n));
 
-  // Seed: linear ramp from a modest floor to an estimated upper bound
+  // Seed: contribution-proportional — each project's M1 is sized by how much
+  // it contributes to the trailing-window income that the fitness function measures.
+  // Early projects whose sales have decayed by the window get low seeds.
   const seedFloor = 50;
-  const seedCeiling = Math.max(seedFloor * 2, inputs.targetIncome / (n * 100));
-  const seed = Array.from({ length: n }, (_, i) =>
-    n === 1 ? seedCeiling : seedFloor + (i / (n - 1)) * (seedCeiling - seedFloor),
-  );
+  const horizon = inputs.timeHorizonMonths;
+  const tailStrength = DEFAULT_TAIL_STRENGTH;
+  const windowSize = Math.max(12, inputs.targetDevScope);
+  const windowStart = Math.max(0, Math.floor(horizon) - windowSize);
+  const windowEnd = Math.floor(horizon);
+
+  // Estimate each project's net profit contribution to the trailing window per M1 unit
+  const profitPerM1InWindow = projects.map((p) => {
+    const pricing = pricingMap.get(p.index)!;
+    let profit = 0;
+    for (let calMonth = windowStart; calMonth < windowEnd; calMonth++) {
+      const salesMonth = calMonth - p.endMonth + 1; // months since launch
+      if (salesMonth < 1) continue;
+      const decay = unitSalesDecay(salesMonth, tailStrength);
+      if (decay < 0.001) continue;
+      const price = averageEffectivePrice(pricing.launchPrice, salesMonth);
+      const revenue = price * decay;
+      profit += revenue * (1 - inputs.platformCutRate);
+    }
+    return profit;
+  });
+
+  // Target: annualized net profit in the window = targetIncome
+  // Compute a base M1 level, then ramp from 60% (first project) to 140% (last project)
+  // so the seed already has a natural progression that later games sell more.
+  const totalProfitPerM1 = profitPerM1InWindow.reduce((a, b) => a + b, 0);
+  const windowIncomeTarget = inputs.targetIncome * (windowSize / 12)
+    + inputs.monthlyFixedExpenses * windowSize; // offset fixed expenses
+
+  const baseM1 = totalProfitPerM1 > 0 ? windowIncomeTarget / totalProfitPerM1 : seedFloor;
+
+  const seed = projects.map((_, i) => {
+    if (profitPerM1InWindow[i] <= 0) return seedFloor;
+    // Ramp from 0.6× to 1.4× across the project sequence
+    const rampFactor = n === 1 ? 1 : 0.6 + 0.8 * (i / (n - 1));
+    return Math.max(seedFloor, baseM1 * rampFactor);
+  });
   enforceM1Constraints(seed);
 
   let bestValues = seed;
