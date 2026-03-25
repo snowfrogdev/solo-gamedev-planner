@@ -11,7 +11,7 @@ bun test             # Run all tests (bun:test)
 bun test src/engine/projectGenerator.test.ts  # Run a single test file
 ```
 
-This project uses **Bun exclusively** — do not use npm/node/npx.
+This project uses **Bun exclusively** — do not use npm/node/npx. Tests use `bun:test` with `happy-dom` for DOM APIs. TypeScript is strict (`noUnusedLocals`, `noUnusedParameters`).
 
 ## Architecture
 
@@ -19,29 +19,52 @@ A solo gamedev planning tool: users configure project scope and time horizon via
 
 ### Layers
 
-```
+```text
 types.ts           Pure interfaces, no dependencies
 engine/            Business logic (no DOM)
-  projectGenerator.ts   Seeded PRNG (mulberry32) + hill-climbing optimizer
+  prng.ts              mulberry32 seeded PRNG
+  optimizerUtils.ts    Shared optimizer helpers (smoothness scoring)
+  projectGenerator.ts  Hill-climbing optimizer for project timeline
   downtimeCalculator.ts Default power-law formulas + custom bezier-based downtime
   curveInterpolator.ts  Cubic bezier evaluation via 200-sample lookup table
   downtimeDefaults.ts   Least-squares bezier fitting to default formulas
-  steamComparison.ts    Steam market comparison: review-to-sales estimation, percentile ranking
+  pricingModel.ts      Launch price from dev scope, AEP decay over time
+  salesModel.ts        Monthly unit-sales time series with power-law decay
+  m1Optimizer.ts       Hill-climbing optimizer for month-1 sales targets
+  expenses.ts          Fixed/variable cost defaults, dev cost weight distribution
+  accountingTimeSeries.ts  Horizon-wide monthly P&L aggregation
+  steamComparison.ts   Steam market comparison: review-to-sales estimation
 api/               External data fetching (browser APIs: fetch, IndexedDB)
   proxyFetch.ts        CORS proxy with failover across multiple services
   rateLimiter.ts       Rate-limited fetch with exponential backoff for 429s
   steamCache.ts        IndexedDB persistence for Steam game data
   steamSearch.ts       Background paginated fetcher for Steam indie games
+  steamDetailFetch.ts  Second-phase genre/early-access enrichment
 state.ts           Pub-sub store (subscribe/notify/updateState)
+utils/             Shared non-domain helpers
+  format.ts          Number/date formatting
+  focusTrap.ts       Keyboard focus trapping for modals
 components/        Factory functions returning {update, show, hide, destroy} interfaces
   inputPanel.ts    Slider controls with cross-linked constraints
   timeline.ts      D3 bar chart visualization
   configScreen.ts  Modal with interactive dual-curve bezier editor
   sidePanel.ts     Project detail overlay with Steam market comparison
+  welcomeBanner.ts Dismissible intro/help banner
+  fetchProgress.ts Steam data fetch progress indicator
 main.ts            Wires state → components, subscribe(regenerate) loop
 ```
 
 Dependencies flow downward: `main → components → engine → types`, `main → api → engine → types`. State imports only from `engine` and `types`. Components do not import from `api/` — data-fetching is injected via callbacks from `main.ts`.
+
+### Financial modeling pipeline
+
+The plan generation flows through a multi-stage pipeline orchestrated in `main.ts`:
+
+1. **Project timeline** (`projectGenerator`): hill-climbing optimizer fills the time horizon with projects of increasing dev scope
+2. **Pricing** (`pricingModel`): each project gets a launch price snapped to Steam price tiers ($4.99–$29.99), plus an AEP (average effective price) decay curve accounting for discounts and regional pricing
+3. **M₁ optimization** (`m1Optimizer`): a second hill-climbing pass finds month-1 unit sales for each project so the portfolio's annualized net profit hits the target income
+4. **Sales series** (`salesModel`): month-1 units × power-law decay → full monthly revenue series per project
+5. **Accounting** (`accountingTimeSeries`): aggregates all projects into a horizon-wide monthly P&L (revenue, COGS, gross profit, fixed expenses, net profit)
 
 ### Key patterns
 
